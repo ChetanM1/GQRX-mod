@@ -11,15 +11,13 @@ python3 tools/generate_fit_demo_iq.py ./fit_demo.cfile --sample-rate 1000000 --s
 ## 2) Start Gqrx on the generated file
 
 ```bash
-./build/src/gqrx -r -c fit_demo.conf
+./build/src/gqrx -c fit_demo.conf
 ```
 
-This forces a fresh config and opens the input device dialog.
-
-In the input device dialog, use a file source string like (replace with your real path):
+In the input device dialog, use a file source string like:
 
 ```text
-file=/home/<you>/GQRX-mod/fit_demo.cfile,freq=14000000,rate=1000000,repeat=true,throttle=true
+file=./fit_demo.cfile,freq=14000000,rate=1000000,repeat=true,throttle=true
 ```
 
 ## 3) Show off the Fit behavior
