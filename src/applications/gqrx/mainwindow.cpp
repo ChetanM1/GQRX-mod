@@ -27,16 +27,20 @@
 
 #include <QSettings>
 #include <QByteArray>
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QDesktopServices>
 #include <QDialogButtonBox>
 #include <QFile>
+#include <QFileInfo>
 #include <QGroupBox>
 #include <QJsonDocument>
 #include <QKeySequence>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QProcessEnvironment>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QResource>
 #include <QShortcut>
 #include <QString>
@@ -72,7 +76,9 @@ MainWindow::MainWindow(const QString& cfgfile, bool edit_conf, QWidget *parent) 
     d_fftWindowType(0),
     d_fftNormalizeEnergy(false),
     d_have_audio(true),
-    dec_afsk1200(nullptr)
+    dec_afsk1200(nullptr),
+    capture_process(nullptr),
+    plot_process(nullptr)
 {
     ui->setupUi(this);
     BandPlan::create();
@@ -2214,6 +2220,201 @@ void MainWindow::on_actionAFSK1200_triggered()
                                     "Close all data decoders and try again."),
                                  QMessageBox::Ok, QMessageBox::Ok);
     }
+}
+
+QString MainWindow::findPythonScript(const QString& script_name) const
+{
+    QStringList candidates = {
+        QDir::current().absoluteFilePath(script_name),
+        QDir::current().absoluteFilePath(QString("tools/%1").arg(script_name)),
+        QCoreApplication::applicationDirPath() + "/" + script_name,
+        QCoreApplication::applicationDirPath() + "/../" + script_name,
+        QCoreApplication::applicationDirPath() + "/../../" + script_name,
+        QCoreApplication::applicationDirPath() + "/../../tools/" + script_name,
+    };
+
+    for (const auto& c : candidates)
+    {
+        if (QFileInfo::exists(c))
+            return QFileInfo(c).canonicalFilePath();
+    }
+
+    return {};
+}
+
+QString MainWindow::extractExistingPath(const QString& output)
+{
+    static const QRegularExpression re(R"((\/[^\s]+(?:\.(?:cfile|raw|wav|png|jpg|jpeg|svg|html|txt))))");
+    auto match_iter = re.globalMatch(output);
+    QString last;
+    while (match_iter.hasNext())
+    {
+        const auto m = match_iter.next();
+        const QString candidate = m.captured(1);
+        if (QFileInfo::exists(candidate))
+            last = candidate;
+    }
+    return last;
+}
+
+void MainWindow::on_actionSched_triggered(bool checked)
+{
+    ui->actionSched->setChecked(false);
+    Q_UNUSED(checked);
+
+    if (capture_process != nullptr)
+    {
+        QMessageBox::information(this, tr("Python backend"),
+                                 tr("A capture is already running."));
+        return;
+    }
+
+    const QString capture_script = findPythonScript("capture.py");
+    if (capture_script.isEmpty())
+    {
+        QMessageBox::warning(this, tr("Python backend"),
+                             tr("Could not find capture.py.\n"
+                                "Place it in the repo root or tools/ directory."));
+        return;
+    }
+
+    capture_process = new QProcess(this);
+    connect(capture_process, SIGNAL(finished(int,QProcess::ExitStatus)),
+            this, SLOT(onCaptureProcessFinished(int,QProcess::ExitStatus)));
+
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    env.insert("GQRX_FREQ_HZ", QString::number(ui->freqCtrl->getFrequency()));
+    env.insert("GQRX_SAMPLE_RATE", QString::number(qRound64(rx->get_input_rate())));
+    env.insert("GQRX_CENTER_FREQ_HZ", QString::number(qRound64(rx->get_rf_freq())));
+    env.insert("GQRX_FILTER_OFFSET_HZ", QString::number(qRound64(rx->get_filter_offset())));
+    env.insert("GQRX_HAVE_AUDIO", d_have_audio ? "1" : "0");
+    capture_process->setProcessEnvironment(env);
+
+    const QString python_exe = "python3";
+    capture_process->start(python_exe, {capture_script});
+    if (!capture_process->waitForStarted(2000))
+    {
+        QMessageBox::critical(this, tr("Python backend"),
+                              tr("Failed to start capture.py using %1.").arg(python_exe));
+        capture_process->deleteLater();
+        capture_process = nullptr;
+        return;
+    }
+
+    ui->statusBar->showMessage(tr("Python capture started..."));
+}
+
+void MainWindow::onCaptureProcessFinished(int exitCode, QProcess::ExitStatus exitStatus)
+{
+    if (!capture_process)
+        return;
+
+    const QString std_out = QString::fromLocal8Bit(capture_process->readAllStandardOutput());
+    const QString std_err = QString::fromLocal8Bit(capture_process->readAllStandardError());
+    const QString combined = std_out + "\n" + std_err;
+    m_last_capture_file = extractExistingPath(combined);
+
+    const bool ok = (exitStatus == QProcess::NormalExit && exitCode == 0);
+    if (!ok)
+    {
+        QMessageBox::warning(this, tr("Python backend"),
+                             tr("capture.py failed.\n\n%1").arg(combined.left(4000)));
+    }
+    else
+    {
+        ui->statusBar->showMessage(tr("Python capture completed"), 5000);
+    }
+
+    capture_process->deleteLater();
+    capture_process = nullptr;
+
+    if (!ok)
+        return;
+
+    auto run_plot = QMessageBox::question(
+        this,
+        tr("Python backend"),
+        tr("Run plotting.py now?\n\nCapture file: %1")
+            .arg(m_last_capture_file.isEmpty() ? tr("(not detected from script output)") : m_last_capture_file),
+        QMessageBox::Yes | QMessageBox::No,
+        QMessageBox::Yes
+    );
+
+    if (run_plot == QMessageBox::Yes)
+        startPlottingScript(m_last_capture_file);
+}
+
+void MainWindow::startPlottingScript(const QString& capture_file)
+{
+    if (plot_process != nullptr)
+        return;
+
+    const QString plotting_script = findPythonScript("plotting.py");
+    if (plotting_script.isEmpty())
+    {
+        QMessageBox::warning(this, tr("Python backend"),
+                             tr("Could not find plotting.py.\n"
+                                "Place it in the repo root or tools/ directory."));
+        return;
+    }
+
+    plot_process = new QProcess(this);
+    connect(plot_process, SIGNAL(finished(int,QProcess::ExitStatus)),
+            this, SLOT(onPlotProcessFinished(int,QProcess::ExitStatus)));
+
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    if (!capture_file.isEmpty())
+        env.insert("GQRX_CAPTURE_FILE", capture_file);
+    env.insert("GQRX_FREQ_HZ", QString::number(ui->freqCtrl->getFrequency()));
+    env.insert("GQRX_SAMPLE_RATE", QString::number(qRound64(rx->get_input_rate())));
+    plot_process->setProcessEnvironment(env);
+
+    QStringList args{plotting_script};
+    if (!capture_file.isEmpty())
+        args << capture_file;
+
+    plot_process->start("python3", args);
+    if (!plot_process->waitForStarted(2000))
+    {
+        QMessageBox::critical(this, tr("Python backend"),
+                              tr("Failed to start plotting.py."));
+        plot_process->deleteLater();
+        plot_process = nullptr;
+        return;
+    }
+
+    ui->statusBar->showMessage(tr("Python plotting started..."));
+}
+
+void MainWindow::onPlotProcessFinished(int exitCode, QProcess::ExitStatus exitStatus)
+{
+    if (!plot_process)
+        return;
+
+    const QString std_out = QString::fromLocal8Bit(plot_process->readAllStandardOutput());
+    const QString std_err = QString::fromLocal8Bit(plot_process->readAllStandardError());
+    const QString combined = std_out + "\n" + std_err;
+    const QString out_path = extractExistingPath(combined);
+    const bool ok = (exitStatus == QProcess::NormalExit && exitCode == 0);
+
+    if (!ok)
+    {
+        QMessageBox::warning(this, tr("Python backend"),
+                             tr("plotting.py failed.\n\n%1").arg(combined.left(4000)));
+    }
+    else if (!out_path.isEmpty())
+    {
+        ui->statusBar->showMessage(tr("Plot generated: %1").arg(out_path), 7000);
+        QDesktopServices::openUrl(QUrl::fromLocalFile(out_path));
+    }
+    else
+    {
+        QMessageBox::information(this, tr("Python backend"),
+                                 tr("plotting.py completed.\n\n%1").arg(combined.left(2000)));
+    }
+
+    plot_process->deleteLater();
+    plot_process = nullptr;
 }
 
 
