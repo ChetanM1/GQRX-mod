@@ -419,6 +419,9 @@
     <addaction name="actionIqTool"/>
     <addaction name="separator"/>
     <addaction name="actionAFSK1200"/>
+    <addaction name="actionRunCapture"/>
+    <addaction name="actionProcessRecordedData"/>
+    <addaction name="actionSched"/>
     <addaction name="separator"/>
     <addaction name="actionDX_Cluster"/>
    </widget>
@@ -440,6 +443,9 @@
    <addaction name="actionDSP"/>
    <addaction name="separator"/>
    <addaction name="actionIoConfig"/>
+   <addaction name="actionRunCapture"/>
+   <addaction name="actionProcessRecordedData"/>
+   <addaction name="actionSched"/>
    <addaction name="actionLoadSettings"/>
    <addaction name="actionSaveSettings"/>
    <addaction name="separator"/>
@@ -519,7 +525,7 @@
     <bool>true</bool>
    </property>
    <property name="enabled">
-    <bool>false</bool>
+    <bool>true</bool>
    </property>
    <property name="icon">
     <iconset resource="../../../resources/icons.qrc">
@@ -529,7 +535,49 @@
     <string>Scheduler</string>
    </property>
    <property name="toolTip">
-    <string>Schedule recordings and other actions</string>
+    <string>Run Python capture/plot backend</string>
+   </property>
+   <property name="statusTip">
+    <string>Run external capture.py and optional plotting.py with current SDR parameters</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+P</string>
+   </property>
+  </action>
+  <action name="actionRunCapture">
+   <property name="icon">
+    <iconset resource="../../../resources/icons.qrc">
+     <normaloff>:/icons/icons/play.svg</normaloff>:/icons/icons/play.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Run Capture</string>
+   </property>
+   <property name="toolTip">
+    <string>Run live Python SDR capture with current Gqrx parameters</string>
+   </property>
+   <property name="statusTip">
+    <string>Launch capture.py for live capture/frequency hopping</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+R</string>
+   </property>
+  </action>
+  <action name="actionProcessRecordedData">
+   <property name="icon">
+    <iconset resource="../../../resources/icons.qrc">
+     <normaloff>:/icons/icons/open.svg</normaloff>:/icons/icons/open.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Process Recorded Data</string>
+   </property>
+   <property name="toolTip">
+    <string>Run plotting.py on existing SigMF/raw IQ recordings</string>
+   </property>
+   <property name="statusTip">
+    <string>Select recorded file/folder and run offline processing</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+O</string>
    </property>
   </action>
   <action name="actionIoConfig">
