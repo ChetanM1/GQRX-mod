@@ -31,6 +31,7 @@
 #include <QDateTime>
 #include <QDesktopServices>
 #include <QDialogButtonBox>
+#include <QDialog>
 #include <QFile>
 #include <QFileInfo>
 #include <QGroupBox>
