@@ -149,10 +149,8 @@ private:
     void rxOffsetZeroShortcut();
     void toggleFreezeShortcut();
     void toggleMarkers();
-    void startCaptureScript();
     QString findPythonScript(const QString& script_name) const;
     void startPlottingScript(const QString& capture_file = QString());
-    void showBackendResult(const QString& path);
     static QString extractExistingPath(const QString& output);
 
 private slots:
@@ -253,8 +251,6 @@ private slots:
     void on_actionAboutQt_triggered();
     void on_actionAddBookmark_triggered();
     void on_actionDX_Cluster_triggered();
-    void on_actionRunCapture_triggered(bool checked);
-    void on_actionProcessRecordedData_triggered(bool checked);
     void on_actionSched_triggered(bool checked);
     void onCaptureProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
     void onPlotProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
