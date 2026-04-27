@@ -135,6 +135,7 @@ flowchart LR
 > - These additions do **not** replace the native Gqrx FFT/waterfall renderer.
 > - They extend the GUI and invoke external scripts through `QProcess`.
 > - Offline processing supports direct selection of `.sigmf-meta` / `.sigmf-data` as well as raw IQ files.
+> - `plotting.py` SigMF workflows require the Python package `sigmf` (`python3 -m pip install --user sigmf`).
 
 
 Known problems

@@ -2504,8 +2504,18 @@ void MainWindow::onPlotProcessFinished(int exitCode, QProcess::ExitStatus exitSt
 
     if (!ok)
     {
+        QString hint;
+        if (combined.contains("No module named 'sigmf'", Qt::CaseInsensitive) ||
+            combined.contains("No module named \"sigmf\"", Qt::CaseInsensitive))
+        {
+            hint = tr("\n\nMissing Python dependency detected: sigmf.\n"
+                      "Install it with:\n"
+                      "  python3 -m pip install --user sigmf");
+        }
+
         QMessageBox::warning(this, tr("Python backend"),
-                             tr("plotting.py failed.\n\n%1").arg(combined.left(4000)));
+                             tr("plotting.py failed.%1\n\n%2")
+                                 .arg(hint, combined.left(4000)));
     }
     else if (!out_path.isEmpty())
     {

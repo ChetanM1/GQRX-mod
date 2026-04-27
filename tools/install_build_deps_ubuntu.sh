@@ -104,6 +104,13 @@ if [[ ${#MISSING_PKGS[@]} -gt 0 ]]; then
   printf '  - %s\n' "${MISSING_PKGS[@]}" >&2
 fi
 
+if python3 -c "import sigmf" >/dev/null 2>&1; then
+  echo "Python package 'sigmf' already installed."
+else
+  echo "Installing Python package 'sigmf' via pip..."
+  python3 -m pip install --user sigmf
+fi
+
 if [[ $DO_BUILD -eq 1 ]]; then
   if [[ ! -f CMakeLists.txt ]]; then
     echo "Run this script from repository root when using --build." >&2
