@@ -61,6 +61,15 @@ SDR_PKGS=(
   gnuradio-dev
   gr-osmosdr
   libvolk-dev
+  uhd-host
+  libuhd-dev
+  python3-uhd
+)
+
+PY_BACKEND_PKGS=(
+  python3-numpy
+  python3-scipy
+  python3-matplotlib
 )
 
 AUDIO_PKGS=(
@@ -72,7 +81,7 @@ if [[ $WITH_PORTAUDIO -eq 1 ]]; then
   AUDIO_PKGS+=(portaudio19-dev)
 fi
 
-ALL_PKGS=("${BASE_PKGS[@]}" "${QT_PKGS[@]}" "${SDR_PKGS[@]}" "${AUDIO_PKGS[@]}")
+ALL_PKGS=("${BASE_PKGS[@]}" "${QT_PKGS[@]}" "${SDR_PKGS[@]}" "${PY_BACKEND_PKGS[@]}" "${AUDIO_PKGS[@]}")
 
 AVAILABLE_PKGS=()
 MISSING_PKGS=()

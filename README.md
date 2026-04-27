@@ -63,6 +63,7 @@ This repository includes optional GUI extensions for:
 
 - **Run Capture** (live external Python capture)
 - **Process Recorded Data** (offline external Python plotting)
+- **USRP/LNB Flow** (single launcher for live capture, offline processing, or `demo.py`)
 - **Fit Signal** (auto-zoom around strongest FFT signal)
 
 ### Where to access in the GUI
@@ -71,10 +72,18 @@ This repository includes optional GUI extensions for:
   - `Tools -> Run Capture`
   - Toolbar button (play icon) near I/O controls
   - Shortcut: `Ctrl+Shift+R`
-- **Process Recorded Data**:
-  - `Tools -> Process Recorded Data`
+- **Process SigMF/Raw Data**:
+  - `Tools -> Process SigMF/Raw Data`
   - Toolbar button (open icon)
   - Shortcut: `Ctrl+Shift+O`
+- **USRP/LNB Flow**:
+  - `Tools -> USRP/LNB Flow`
+  - Toolbar button (clock icon)
+  - Shortcut: `Ctrl+Shift+U`
+  - Opens chooser for:
+    - `Run Live Capture`
+    - `Process SigMF/Raw`
+    - `Open demo.py GUI`
 - **Fit Signal**:
   - Open the FFT settings dock (`FFT Set...`)
   - Click the **Fit Signal** button
@@ -125,6 +134,7 @@ flowchart LR
 > Notes:
 > - These additions do **not** replace the native Gqrx FFT/waterfall renderer.
 > - They extend the GUI and invoke external scripts through `QProcess`.
+> - Offline processing supports direct selection of `.sigmf-meta` / `.sigmf-data` as well as raw IQ files.
 
 
 Known problems

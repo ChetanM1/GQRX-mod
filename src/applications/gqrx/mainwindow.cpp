@@ -41,6 +41,8 @@
 #include <QMessageBox>
 #include <QProcessEnvironment>
 #include <QPushButton>
+#include <QLabel>
+#include <QPixmap>
 #include <QRegularExpression>
 #include <QResource>
 #include <QShortcut>
@@ -2258,11 +2260,8 @@ QString MainWindow::extractExistingPath(const QString& output)
     return last;
 }
 
-void MainWindow::on_actionSched_triggered(bool checked)
+void MainWindow::startCaptureScript()
 {
-    ui->actionSched->setChecked(false);
-    Q_UNUSED(checked);
-
     if (capture_process != nullptr)
     {
         QMessageBox::information(this, tr("Python backend"),
@@ -2283,16 +2282,29 @@ void MainWindow::on_actionSched_triggered(bool checked)
     connect(capture_process, SIGNAL(finished(int,QProcess::ExitStatus)),
             this, SLOT(onCaptureProcessFinished(int,QProcess::ExitStatus)));
 
+    std::vector<std::string> gain_names = rx->get_gain_names();
+    double gain_val = 0.0;
+    if (!gain_names.empty())
+        gain_val = rx->get_gain(gain_names.front());
+
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
     env.insert("GQRX_FREQ_HZ", QString::number(ui->freqCtrl->getFrequency()));
     env.insert("GQRX_SAMPLE_RATE", QString::number(qRound64(rx->get_input_rate())));
     env.insert("GQRX_CENTER_FREQ_HZ", QString::number(qRound64(rx->get_rf_freq())));
     env.insert("GQRX_FILTER_OFFSET_HZ", QString::number(qRound64(rx->get_filter_offset())));
+    env.insert("GQRX_GAIN_DB", QString::number(gain_val, 'f', 2));
     env.insert("GQRX_HAVE_AUDIO", d_have_audio ? "1" : "0");
     capture_process->setProcessEnvironment(env);
 
     const QString python_exe = "python3";
-    capture_process->start(python_exe, {capture_script});
+    QStringList args{
+        capture_script,
+        "--frequency", QString::number(ui->freqCtrl->getFrequency()),
+        "--sample-rate", QString::number(qRound64(rx->get_input_rate())),
+        "--center-frequency", QString::number(qRound64(rx->get_rf_freq())),
+        "--gain", QString::number(gain_val, 'f', 2)
+    };
+    capture_process->start(python_exe, args);
     if (!capture_process->waitForStarted(2000))
     {
         QMessageBox::critical(this, tr("Python backend"),
@@ -2303,6 +2315,90 @@ void MainWindow::on_actionSched_triggered(bool checked)
     }
 
     ui->statusBar->showMessage(tr("Python capture started..."));
+}
+
+void MainWindow::on_actionRunCapture_triggered(bool checked)
+{
+    Q_UNUSED(checked);
+    startCaptureScript();
+}
+
+void MainWindow::on_actionUsrpLnbFlow_triggered(bool checked)
+{
+    Q_UNUSED(checked);
+
+    QMessageBox box(this);
+    box.setIcon(QMessageBox::Question);
+    box.setWindowTitle(tr("USRP/LNB Flow"));
+    box.setText(tr("Choose workflow mode:"));
+    auto *capture_btn = box.addButton(tr("Run Live Capture"), QMessageBox::ActionRole);
+    auto *process_btn = box.addButton(tr("Process SigMF/Raw"), QMessageBox::ActionRole);
+    auto *demo_btn = box.addButton(tr("Open demo.py GUI"), QMessageBox::ActionRole);
+    box.addButton(QMessageBox::Cancel);
+    box.exec();
+
+    if (box.clickedButton() == capture_btn)
+    {
+        startCaptureScript();
+    }
+    else if (box.clickedButton() == process_btn)
+    {
+        on_actionProcessRecordedData_triggered(false);
+    }
+    else if (box.clickedButton() == demo_btn)
+    {
+        const QString demo_script = findPythonScript("demo.py");
+        if (demo_script.isEmpty())
+        {
+            QMessageBox::warning(this, tr("Python backend"),
+                                 tr("Could not find demo.py.\n"
+                                    "Place it in the repo root or tools/ directory."));
+            return;
+        }
+
+        const bool started = QProcess::startDetached("python3", {demo_script});
+        if (!started)
+        {
+            QMessageBox::critical(this, tr("Python backend"),
+                                  tr("Failed to start demo.py."));
+        }
+    }
+}
+
+void MainWindow::on_actionSched_triggered(bool checked)
+{
+    ui->actionSched->setChecked(false);
+    Q_UNUSED(checked);
+    startCaptureScript();
+}
+
+void MainWindow::on_actionProcessRecordedData_triggered(bool checked)
+{
+    Q_UNUSED(checked);
+
+    QString selected = QFileDialog::getOpenFileName(
+        this,
+        tr("Select SigMF/raw recorded file"),
+        m_last_dir,
+        tr("SigMF files (*.sigmf-meta *.sigmf-data);;"
+           "Raw/IQ files (*.cfile *.raw *.bin *.iq *.wav);;"
+           "All files (*)")
+    );
+
+    if (selected.isEmpty())
+    {
+        selected = QFileDialog::getExistingDirectory(
+            this,
+            tr("Select recording directory"),
+            m_last_dir
+        );
+    }
+
+    if (selected.isEmpty())
+        return;
+
+    m_last_dir = QFileInfo(selected).absolutePath();
+    startPlottingScript(selected);
 }
 
 void MainWindow::onCaptureProcessFinished(int exitCode, QProcess::ExitStatus exitStatus)
@@ -2365,14 +2461,22 @@ void MainWindow::startPlottingScript(const QString& capture_file)
 
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
     if (!capture_file.isEmpty())
+    {
         env.insert("GQRX_CAPTURE_FILE", capture_file);
+        const QString lower = capture_file.toLower();
+        const bool sigmf = lower.endsWith(".sigmf-meta") || lower.endsWith(".sigmf-data");
+        env.insert("GQRX_INPUT_FORMAT", sigmf ? "SIGMF" : "RAW");
+    }
     env.insert("GQRX_FREQ_HZ", QString::number(ui->freqCtrl->getFrequency()));
     env.insert("GQRX_SAMPLE_RATE", QString::number(qRound64(rx->get_input_rate())));
     plot_process->setProcessEnvironment(env);
 
     QStringList args{plotting_script};
     if (!capture_file.isEmpty())
-        args << capture_file;
+    {
+        args << "--input" << capture_file;
+        args << capture_file; // compatibility with plotting scripts that use positional input
+    }
 
     plot_process->start("python3", args);
     if (!plot_process->waitForStarted(2000))
@@ -2406,7 +2510,7 @@ void MainWindow::onPlotProcessFinished(int exitCode, QProcess::ExitStatus exitSt
     else if (!out_path.isEmpty())
     {
         ui->statusBar->showMessage(tr("Plot generated: %1").arg(out_path), 7000);
-        QDesktopServices::openUrl(QUrl::fromLocalFile(out_path));
+        showBackendResult(out_path);
     }
     else
     {
@@ -2416,6 +2520,42 @@ void MainWindow::onPlotProcessFinished(int exitCode, QProcess::ExitStatus exitSt
 
     plot_process->deleteLater();
     plot_process = nullptr;
+}
+
+void MainWindow::showBackendResult(const QString& path)
+{
+    const QString lower = path.toLower();
+    const bool image = lower.endsWith(".png") || lower.endsWith(".jpg")
+                    || lower.endsWith(".jpeg") || lower.endsWith(".svg");
+
+    if (!image)
+    {
+        QDesktopServices::openUrl(QUrl::fromLocalFile(path));
+        return;
+    }
+
+    auto *dlg = new QDialog(this);
+    dlg->setWindowTitle(tr("Python backend output"));
+    dlg->setAttribute(Qt::WA_DeleteOnClose);
+    dlg->resize(900, 600);
+
+    auto *layout = new QVBoxLayout(dlg);
+    auto *label = new QLabel(dlg);
+    label->setAlignment(Qt::AlignCenter);
+    label->setMinimumSize(320, 200);
+    label->setScaledContents(false);
+
+    QPixmap pm(path);
+    if (!pm.isNull())
+        label->setPixmap(pm.scaled(860, 520, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    else
+        label->setText(tr("Could not load image, opening externally instead."));
+
+    layout->addWidget(label);
+    dlg->show();
+
+    if (pm.isNull())
+        QDesktopServices::openUrl(QUrl::fromLocalFile(path));
 }
 
 
