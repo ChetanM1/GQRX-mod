@@ -337,6 +337,19 @@
       </property>
      </widget>
     </item>
+    <item>
+     <widget class="QLabel" name="audioRecStatusLabel">
+      <property name="toolTip">
+       <string>Recording schedule/activity indicator</string>
+      </property>
+      <property name="text">
+       <string>Rec Schedule: OFF</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignCenter</set>
+      </property>
+     </widget>
+    </item>
    </layout>
   </widget>
  </widget>

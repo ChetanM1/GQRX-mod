@@ -56,6 +56,88 @@ Tutorials and howtos are being written and published on the website
 https://gqrx.dk/
 
 
+Python backend + Fit Signal quick guide
+--------------------------------------
+
+This repository includes optional GUI extensions for:
+
+- **Run Capture** (live external Python capture)
+- **Process Recorded Data** (offline external Python plotting)
+- **USRP/LNB Flow** (single launcher for live capture, offline processing, or `demo.py`)
+- **Fit Signal** (auto-zoom around strongest FFT signal)
+
+### Where to access in the GUI
+
+- **Run Capture**:
+  - `Tools -> Run Capture`
+  - Toolbar button (play icon) near I/O controls
+  - Shortcut: `Ctrl+Shift+R`
+- **Process SigMF/Raw Data**:
+  - `Tools -> Process SigMF/Raw Data`
+  - Toolbar button (open icon)
+  - Shortcut: `Ctrl+Shift+O`
+- **USRP/LNB Flow**:
+  - `Tools -> USRP/LNB Flow`
+  - Toolbar button (clock icon)
+  - Shortcut: `Ctrl+Shift+U`
+  - Opens chooser for:
+    - `Run Live Capture`
+    - `Process SigMF/Raw`
+    - `Open demo.py GUI`
+- **Fit Signal**:
+  - Open the FFT settings dock (`FFT Set...`)
+  - Click the **Fit Signal** button
+
+### Live capture flow (GUI -> capture.py -> optional plotting.py)
+
+```mermaid
+flowchart LR
+    A[Run Capture action] --> B[Read current SDR params from Gqrx]
+    B --> C[Launch capture.py via QProcess]
+    C --> D{Capture success?}
+    D -- Yes --> E[Prompt to run plotting.py]
+    E --> F[Launch plotting.py]
+    F --> G[Detect output path]
+    G --> H[Show image preview or open output]
+    D -- No --> I[Show error/log message]
+```
+
+### Offline flow (recorded SigMF/raw IQ -> plotting.py)
+
+```mermaid
+flowchart LR
+    A[Process Recorded Data action] --> B[File picker]
+    B --> C[Optional directory picker fallback]
+    C --> D[Launch plotting.py with selected input]
+    D --> E[Detect generated output path]
+    E --> F[Show image preview or open output]
+```
+
+### Fit Signal flow (existing FFT/waterfall untouched)
+
+```mermaid
+flowchart LR
+    A[Fit Signal button] --> B[Analyze current FFT in dB]
+    B --> C[Estimate noise floor + peak bounds]
+    C --> D[Adjust FFT center/span]
+    D --> E[Emit new zoom level]
+```
+
+### Demo data and helper tools
+
+- Generate synthetic IQ demo file:
+  - `python3 tools/generate_fit_demo_iq.py ./fit_demo.cfile --sample-rate 1000000 --seconds 12`
+- Install common Ubuntu build/runtime deps:
+  - `./tools/install_build_deps_ubuntu.sh`
+  - `./tools/install_build_deps_ubuntu.sh --build`
+
+> Notes:
+> - These additions do **not** replace the native Gqrx FFT/waterfall renderer.
+> - They extend the GUI and invoke external scripts through `QProcess`.
+> - Offline processing supports direct selection of `.sigmf-meta` / `.sigmf-data` as well as raw IQ files.
+> - `plotting.py` SigMF workflows require the Python package `sigmf` (`python3 -m pip install --user sigmf`).
+
+
 Known problems
 --------------
 
