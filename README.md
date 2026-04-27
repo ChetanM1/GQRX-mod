@@ -130,12 +130,14 @@ flowchart LR
 - Install common Ubuntu build/runtime deps:
   - `./tools/install_build_deps_ubuntu.sh`
   - `./tools/install_build_deps_ubuntu.sh --build`
+- Install Python backend deps only (works on non-Ubuntu too):
+  - `./tools/install_python_backend_deps.sh`
 
 > Notes:
 > - These additions do **not** replace the native Gqrx FFT/waterfall renderer.
 > - They extend the GUI and invoke external scripts through `QProcess`.
 > - Offline processing supports direct selection of `.sigmf-meta` / `.sigmf-data` as well as raw IQ files.
-> - `plotting.py` SigMF workflows require the Python package `sigmf` (`python3 -m pip install --user sigmf`).
+> - If Python backend actions fail with `No module named ...`, run `./tools/install_python_backend_deps.sh`.
 
 
 Known problems

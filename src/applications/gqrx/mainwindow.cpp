@@ -2505,12 +2505,11 @@ void MainWindow::onPlotProcessFinished(int exitCode, QProcess::ExitStatus exitSt
     if (!ok)
     {
         QString hint;
-        if (combined.contains("No module named 'sigmf'", Qt::CaseInsensitive) ||
-            combined.contains("No module named \"sigmf\"", Qt::CaseInsensitive))
+        if (combined.contains("No module named", Qt::CaseInsensitive))
         {
-            hint = tr("\n\nMissing Python dependency detected: sigmf.\n"
-                      "Install it with:\n"
-                      "  python3 -m pip install --user sigmf");
+            hint = tr("\n\nMissing Python dependency detected.\n"
+                      "Install backend packages with:\n"
+                      "  ./tools/install_python_backend_deps.sh");
         }
 
         QMessageBox::warning(this, tr("Python backend"),

@@ -104,8 +104,8 @@ if [[ ${#MISSING_PKGS[@]} -gt 0 ]]; then
   printf '  - %s\n' "${MISSING_PKGS[@]}" >&2
 fi
 
-if python3 -c "import sigmf" >/dev/null 2>&1; then
-  echo "Python package 'sigmf' already installed."
+if [[ -x ./tools/install_python_backend_deps.sh ]]; then
+  ./tools/install_python_backend_deps.sh
 else
   echo "Installing Python package 'sigmf' via pip..."
   python3 -m pip install --user sigmf
