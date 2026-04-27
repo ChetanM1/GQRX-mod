@@ -136,6 +136,7 @@ private:
     void           muteToggleShortcut();
     void           increaseAudioGainShortcut();
     void           decreaseAudioGainShortcut();
+    void           setRecordingScheduleIndicator(bool active);
 };
 
 #endif // DOCKAUDIO_H
