@@ -1240,6 +1240,26 @@ def find_velocity_records(root_dir):
     return records, warnings
 
 
+def suppress_static_velocity_components(matrix_db, vel_axis, dc_exclusion_bins=8):
+    """Suppress static clutter and DC-centered bins to reveal moving Doppler traces."""
+    if matrix_db.ndim != 2 or len(vel_axis) == 0:
+        return matrix_db
+
+    cleaned = np.array(matrix_db, copy=True, dtype=np.float32)
+
+    # Remove time-stationary clutter by subtracting per-velocity median.
+    static_bg = np.median(cleaned, axis=0, keepdims=True)
+    cleaned = cleaned - static_bg
+
+    # Forcefully suppress bins around 0 m/s to reduce LO/DC leakage.
+    zero_idx = int(np.argmin(np.abs(vel_axis)))
+    lo = max(0, zero_idx - int(dc_exclusion_bins))
+    hi = min(cleaned.shape[1], zero_idx + int(dc_exclusion_bins) + 1)
+    floor = np.percentile(cleaned, 5)
+    cleaned[:, lo:hi] = floor
+    return cleaned
+
+
 class VelocityPlottingWindow(tk.Toplevel):
     """Plot velocity-domain Doppler waterfalls from preprocessing .npy files."""
 
@@ -1526,6 +1546,7 @@ class VelocityPlottingWindow(tk.Toplevel):
                         f"matrix {matrix_db.shape}, len(time)={len(t_full)}, len(vel)={len(vel)}"))
                     return
 
+                plot_db = suppress_static_velocity_components(plot_db, vel)
                 result = (plot_db, vel, t_full)
                 self.after(0, lambda r=result: self._display_result(
                     r, params))
@@ -1558,7 +1579,6 @@ class VelocityPlottingWindow(tk.Toplevel):
         if selected_rec:
             title += f"\n{selected_rec['base']}"
         self.ax.set_title(title)
-        self.ax.axvline(0, color="white", ls="--", lw=1, alpha=0.5)
         self.fig.tight_layout()
         self.canvas.draw()
         self.status_var.set("Re-rendered with updated display settings")
@@ -1586,7 +1606,6 @@ class VelocityPlottingWindow(tk.Toplevel):
         title = "Doppler Velocity Waterfall"
         title += f"\n{rec['base']}"
         self.ax.set_title(title)
-        self.ax.axvline(0, color="white", ls="--", lw=1, alpha=0.5)
         self.fig.tight_layout()
         self.canvas.draw()
 
