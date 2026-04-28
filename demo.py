@@ -326,7 +326,8 @@ class StarlinkSigMFCapture:
         return meta_path, data_path, total_received, power_dbm
 
     def _compress_samples(self, samples, sample_rate, center_freq,
-                          k=10, nfft=1024, noverlap=512, DC_width=5000):
+                          k=10, nfft=1024, noverlap=512, DC_width=5000,
+                          dc_exclusion_bins=8, power_threshold_db=None):
         samples = np.array(samples)
         f, t, STFT = signal.stft(samples, fs=sample_rate, nperseg=nfft,
                                   noverlap=noverlap, return_onesided=False)
@@ -336,13 +337,27 @@ class StarlinkSigMFCapture:
         output_vals = np.zeros((numFrames, k), dtype=complex)
         output_freqs = np.zeros((numFrames, k))
         kill_inds = np.where(np.abs(f) <= DC_width)
+        center_bin = len(f) // 2
+        dc_bin_lo = max(0, center_bin - int(dc_exclusion_bins))
+        dc_bin_hi = min(len(f), center_bin + int(dc_exclusion_bins) + 1)
         for i in range(numFrames):
             working_row = np.abs(STFT[:, i])
             working_row[kill_inds] = 0
-            large_inds = np.argpartition(working_row, -k)[-k:]
+            working_row[dc_bin_lo:dc_bin_hi] = 0
+            if power_threshold_db is not None:
+                thr_lin = 10.0 ** (float(power_threshold_db) / 20.0)
+                working_row[working_row < thr_lin] = 0
+
+            valid_inds = np.flatnonzero(working_row > 0)
+            if valid_inds.size == 0:
+                continue
+
+            k_eff = min(k, valid_inds.size)
+            local = np.argpartition(working_row[valid_inds], -k_eff)[-k_eff:]
+            large_inds = valid_inds[local]
             large_inds = large_inds[np.argsort(f[large_inds])]
-            output_vals[i, :] = STFT[large_inds, i]
-            output_freqs[i, :] = f[large_inds]
+            output_vals[i, :k_eff] = STFT[large_inds, i]
+            output_freqs[i, :k_eff] = f[large_inds]
         return np.column_stack((output_freqs, output_vals))
 
     def frequency_hopping_capture(self, start_freq=10.7e9, end_freq=12.7e9,

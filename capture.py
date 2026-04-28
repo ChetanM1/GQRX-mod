@@ -363,6 +363,8 @@ class StarlinkSigMFCapture:
         nfft = 1024,
         noverlap = 512,
         DC_width = 5000,
+        dc_exclusion_bins = 8,
+        power_threshold_db = None,
     ):
         # Basic setup
         samples = np.array(samples)
@@ -395,6 +397,9 @@ class StarlinkSigMFCapture:
         outputFreqs = np.zeros((numFrames,k))
 
         killInds = np.where((np.abs(f) <= DC_width))
+        centerBin = len(f) // 2
+        dcBinLo = max(0, centerBin - int(dc_exclusion_bins))
+        dcBinHi = min(len(f), centerBin + int(dc_exclusion_bins) + 1)
 
         c = constants.c
 
@@ -408,9 +413,19 @@ class StarlinkSigMFCapture:
 
             #Ignore the DC Band
             workingRow[killInds] = 0
+            workingRow[dcBinLo:dcBinHi] = 0
+            if power_threshold_db is not None:
+                thrLin = 10.0 ** (float(power_threshold_db) / 20.0)
+                workingRow[workingRow < thrLin] = 0
+
+            validInds = np.flatnonzero(workingRow > 0)
+            if validInds.size == 0:
+                continue
 
             #Identify the largest k values in the row and their indices
-            largeInds = np.argpartition(workingRow, -k)[-k:]
+            kEff = min(k, validInds.size)
+            local = np.argpartition(workingRow[validInds], -kEff)[-kEff:]
+            largeInds = validInds[local]
             largeInds = largeInds[np.argsort(f[largeInds])]
 
             largeVals = STFT[largeInds,i]
@@ -423,9 +438,9 @@ class StarlinkSigMFCapture:
 
 
             maxVals[i] = satFreq 
-            outputVals[i,:] = largeVals      
+            outputVals[i,:kEff] = largeVals
             #outputFreqs[i,:] = f[largeInds] #Store compressed frequencies
-            outputFreqs[i,:] = relVels       #Store compressed relative velocities
+            outputFreqs[i,:kEff] = relVels       #Store compressed relative velocities
 
 
         #Merge the frequency data with the complex values

@@ -129,17 +129,41 @@ def estimate_doppler(waterfall_db: np.ndarray, sample_rate: float) -> Tuple[np.n
     return t, doppler_hz
 
 
-def estimate_topk_doppler(waterfall_db: np.ndarray, sample_rate: float, k: int = 5) -> Tuple[np.ndarray, np.ndarray]:
-    """Estimate Doppler per frame using weighted top-k tones."""
+def estimate_topk_doppler(
+    waterfall_db: np.ndarray,
+    sample_rate: float,
+    k: int = 5,
+    dc_exclusion_bins: int = 8,
+    power_floor_db: float | None = None,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Estimate Doppler per frame using weighted top-k tones, excluding DC bins."""
     nfft = waterfall_db.shape[1]
     k = max(1, min(k, nfft))
     freqs = np.fft.fftshift(np.fft.fftfreq(nfft, d=1.0 / sample_rate))
+    center = nfft // 2
+    dc_lo = max(0, center - int(dc_exclusion_bins))
+    dc_hi = min(nfft, center + int(dc_exclusion_bins) + 1)
 
-    idx = np.argpartition(waterfall_db, -k, axis=1)[:, -k:]
-    top_vals = np.take_along_axis(waterfall_db, idx, axis=1)
-    weights = np.exp(top_vals - np.max(top_vals, axis=1, keepdims=True))
-    selected_freqs = freqs[idx]
-    doppler_hz = np.sum(selected_freqs * weights, axis=1) / np.sum(weights, axis=1)
+    doppler_hz = np.zeros(waterfall_db.shape[0], dtype=np.float64)
+    for i, row in enumerate(waterfall_db):
+        working = np.array(row, copy=True)
+        working[dc_lo:dc_hi] = -np.inf
+        if power_floor_db is not None:
+            working[working < power_floor_db] = -np.inf
+
+        valid = np.flatnonzero(np.isfinite(working))
+        if valid.size == 0:
+            continue
+
+        k_eff = min(k, valid.size)
+        local = np.argpartition(working[valid], -k_eff)[-k_eff:]
+        idx = valid[local]
+        top_vals = working[idx]
+        weights = np.exp(top_vals - np.max(top_vals))
+        selected_freqs = freqs[idx]
+        denom = np.sum(weights)
+        if denom > 0:
+            doppler_hz[i] = np.sum(selected_freqs * weights) / denom
     t = np.arange(waterfall_db.shape[0], dtype=np.float64)
     return t, doppler_hz
 
