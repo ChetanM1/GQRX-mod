@@ -32,6 +32,7 @@
 #include <QDesktopServices>
 #include <QDialogButtonBox>
 #include <QDialog>
+#include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QGroupBox>
@@ -46,6 +47,7 @@
 #include <QRegularExpression>
 #include <QResource>
 #include <QShortcut>
+#include <QSet>
 #include <QString>
 #include <QTextBrowser>
 #include <QTextCursor>
@@ -70,6 +72,70 @@
 #include "qtgui/bookmarkstaglist.h"
 #include "qtgui/bandplan.h"
 
+namespace {
+bool validateSigmfSelection(const QString& selected_path, QString* error_msg)
+{
+    const QFileInfo selected_info(selected_path);
+    if (!selected_info.exists())
+    {
+        if (error_msg)
+            *error_msg = QObject::tr("The selected path does not exist:\n%1").arg(selected_path);
+        return false;
+    }
+
+    if (selected_info.isDir())
+    {
+        const QDir dir(selected_path);
+        const QStringList meta_files = dir.entryList(QStringList() << "*.sigmf-meta", QDir::Files);
+        QSet<QString> meta_bases;
+        for (const QString& meta_file : meta_files)
+            meta_bases.insert(QFileInfo(meta_file).completeBaseName());
+
+        const QStringList data_files = dir.entryList(QStringList() << "*.sigmf-data", QDir::Files);
+        for (const QString& data_file : data_files)
+        {
+            if (meta_bases.contains(QFileInfo(data_file).completeBaseName()))
+                return true;
+        }
+
+        if (error_msg)
+        {
+            *error_msg = QObject::tr(
+                "The selected directory does not contain a complete SigMF pair.\n\n"
+                "A valid recording needs both .sigmf-meta and .sigmf-data files with the same base name.");
+        }
+        return false;
+    }
+
+    const QString lower = selected_info.fileName().toLower();
+    if (!lower.endsWith(".sigmf-meta") && !lower.endsWith(".sigmf-data"))
+    {
+        if (error_msg)
+        {
+            *error_msg = QObject::tr(
+                "Please select a SigMF directory, a .sigmf-meta file, or a .sigmf-data file.");
+        }
+        return false;
+    }
+
+    const QString base = selected_info.absolutePath() + "/" + selected_info.completeBaseName();
+    const QString meta = base + ".sigmf-meta";
+    const QString data = base + ".sigmf-data";
+    if (!QFileInfo::exists(meta) || !QFileInfo::exists(data))
+    {
+        if (error_msg)
+        {
+            *error_msg = QObject::tr(
+                "The selected SigMF recording is incomplete.\n\nMissing pair:\n%1\n%2")
+                             .arg(meta, data);
+        }
+        return false;
+    }
+
+    return true;
+}
+}
+
 MainWindow::MainWindow(const QString& cfgfile, bool edit_conf, QWidget *parent) :
     QMainWindow(parent),
     configOk(true),
@@ -84,6 +150,7 @@ MainWindow::MainWindow(const QString& cfgfile, bool edit_conf, QWidget *parent) 
     capture_process(nullptr),
     plot_process(nullptr),
     analysis_process(nullptr),
+    doppler_preprocess_process(nullptr),
     m_plot_retry_attempted(false)
 {
     ui->setupUi(this);
@@ -2495,6 +2562,159 @@ void MainWindow::on_actionProcessRecordedData_triggered(bool checked)
 
     m_last_dir = QFileInfo(selected).absolutePath();
     startPlottingScript(selected);
+}
+
+void MainWindow::on_actionOpenStarlinkAnalyzer_triggered(bool checked)
+{
+    Q_UNUSED(checked);
+
+    QFileDialog picker(this, tr("Select SigMF recording input"), m_last_dir);
+    picker.setFileMode(QFileDialog::AnyFile);
+    picker.setOption(QFileDialog::DontUseNativeDialog, true);
+    picker.setOption(QFileDialog::ShowDirsOnly, false);
+    picker.setNameFilter(tr("SigMF recordings (*.sigmf-meta *.sigmf-data);;All files (*)"));
+
+    if (picker.exec() != QDialog::Accepted)
+        return;
+
+    const QStringList selected_paths = picker.selectedFiles();
+    if (selected_paths.isEmpty())
+        return;
+
+    const QString selected_path = selected_paths.first();
+    QString validation_error;
+    if (!validateSigmfSelection(selected_path, &validation_error))
+    {
+        QMessageBox::warning(this, tr("Open Starlink Analyzer"), validation_error);
+        return;
+    }
+
+    QString demo_script;
+    if (m_settings && m_settings->contains("python/demo_script_path"))
+    {
+        demo_script = m_settings->value("python/demo_script_path").toString();
+    }
+    if (demo_script.isEmpty())
+        demo_script = findPythonScript("demo.py");
+    if (demo_script.isEmpty())
+    {
+        QMessageBox::critical(this, tr("Open Starlink Analyzer"),
+                              tr("Could not find demo.py.\n"
+                                 "Set python/demo_script_path in settings, or place demo.py in "
+                                 "the repo root or tools/ directory."));
+        return;
+    }
+
+    auto *demo_process = new QProcess(this);
+    connect(demo_process, SIGNAL(finished(int,QProcess::ExitStatus)),
+            demo_process, SLOT(deleteLater()));
+    demo_process->start("python3", QStringList{demo_script, "--plot", selected_path});
+    if (!demo_process->waitForStarted(2000))
+    {
+        QMessageBox::critical(this, tr("Open Starlink Analyzer"),
+                              tr("Failed to launch Starlink Analyzer.\n\n"
+                                 "Command: python3 %1 --plot %2")
+                                  .arg(demo_script, selected_path));
+        demo_process->deleteLater();
+        return;
+    }
+
+    m_last_dir = QFileInfo(selected_path).absolutePath();
+    ui->statusBar->showMessage(tr("Launched Starlink Analyzer"), 5000);
+}
+
+void MainWindow::on_actionRunDopplerPreprocessing_triggered(bool checked)
+{
+    Q_UNUSED(checked);
+
+    if (doppler_preprocess_process != nullptr)
+    {
+        QMessageBox::information(this, tr("Run Doppler Preprocessing"),
+                                 tr("Doppler preprocessing is already running."));
+        return;
+    }
+
+    const QString selected_dir = QFileDialog::getExistingDirectory(
+        this,
+        tr("Select folder with SigMF files"),
+        m_last_dir);
+    if (selected_dir.isEmpty())
+        return;
+
+    QDir dir(selected_dir);
+    const bool has_meta = !dir.entryList(QStringList() << "*.sigmf-meta", QDir::Files).isEmpty();
+    const bool has_data = !dir.entryList(QStringList() << "*.sigmf-data", QDir::Files).isEmpty();
+    if (!has_meta || !has_data)
+    {
+        QMessageBox::warning(
+            this,
+            tr("Run Doppler Preprocessing"),
+            tr("Selected folder must contain both .sigmf-meta and .sigmf-data files."));
+        return;
+    }
+
+    QString script_path;
+    if (m_settings && m_settings->contains("python/doppler_preprocess_script_path"))
+        script_path = m_settings->value("python/doppler_preprocess_script_path").toString();
+    if (script_path.isEmpty())
+        script_path = findPythonScript("correlation_preprocessing.py");
+    if (script_path.isEmpty())
+        script_path = "correlation_preprocessing.py";
+
+    doppler_preprocess_process = new QProcess(this);
+    connect(doppler_preprocess_process, SIGNAL(finished(int,QProcess::ExitStatus)),
+            this, SLOT(onDopplerPreprocessFinished(int,QProcess::ExitStatus)));
+
+    doppler_preprocess_process->setWorkingDirectory(selected_dir);
+    doppler_preprocess_process->start("python3", QStringList{script_path, selected_dir});
+    if (!doppler_preprocess_process->waitForStarted(2000))
+    {
+        const QString stderr_text =
+            QString::fromLocal8Bit(doppler_preprocess_process->readAllStandardError()).trimmed();
+        QMessageBox::critical(
+            this,
+            tr("Run Doppler Preprocessing"),
+            tr("Failed to start Doppler preprocessing.\n\nCommand: python3 %1 %2%3")
+                .arg(script_path, selected_dir,
+                     stderr_text.isEmpty() ? QString() : QString("\n\nstderr:\n%1").arg(stderr_text)));
+        doppler_preprocess_process->deleteLater();
+        doppler_preprocess_process = nullptr;
+        return;
+    }
+
+    m_last_doppler_preprocess_dir = selected_dir;
+    m_last_dir = selected_dir;
+    ui->statusBar->showMessage(tr("Running Doppler preprocessing..."));
+}
+
+void MainWindow::onDopplerPreprocessFinished(int exitCode, QProcess::ExitStatus exitStatus)
+{
+    if (!doppler_preprocess_process)
+        return;
+
+    const QString stderr_text =
+        QString::fromLocal8Bit(doppler_preprocess_process->readAllStandardError()).trimmed();
+    const bool ok = (exitStatus == QProcess::NormalExit && exitCode == 0);
+    if (ok)
+    {
+        QMessageBox::information(
+            this,
+            tr("Run Doppler Preprocessing"),
+            tr("Doppler preprocessing finished.\n\nOutput folder:\n%1")
+                .arg(m_last_doppler_preprocess_dir));
+        ui->statusBar->showMessage(tr("Doppler preprocessing finished"), 5000);
+    }
+    else
+    {
+        QMessageBox::critical(
+            this,
+            tr("Run Doppler Preprocessing"),
+            tr("Doppler preprocessing failed.\n\nstderr:\n%1")
+                .arg(stderr_text.isEmpty() ? tr("(no stderr output)") : stderr_text.left(12000)));
+    }
+
+    doppler_preprocess_process->deleteLater();
+    doppler_preprocess_process = nullptr;
 }
 
 void MainWindow::onCaptureProcessFinished(int exitCode, QProcess::ExitStatus exitStatus)
