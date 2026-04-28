@@ -421,6 +421,11 @@
     <addaction name="actionAFSK1200"/>
     <addaction name="actionUsrpLnbFlow"/>
     <addaction name="actionRunCapture"/>
+    <addaction name="actionOpenDataFlow"/>
+    <addaction name="actionOpenStarlinkAnalyzer"/>
+    <addaction name="actionRunDopplerPreprocessing"/>
+    <addaction name="actionShowDopplerVelocityPlot"/>
+    <addaction name="actionShowDopplerVelocityWaterfall"/>
     <addaction name="actionProcessRecordedData"/>
     <addaction name="actionRunStarlinkDopplerAnalysis"/>
     <addaction name="actionSched"/>
@@ -447,6 +452,11 @@
    <addaction name="actionIoConfig"/>
    <addaction name="actionUsrpLnbFlow"/>
    <addaction name="actionRunCapture"/>
+   <addaction name="actionOpenDataFlow"/>
+   <addaction name="actionOpenStarlinkAnalyzer"/>
+   <addaction name="actionRunDopplerPreprocessing"/>
+   <addaction name="actionShowDopplerVelocityPlot"/>
+   <addaction name="actionShowDopplerVelocityWaterfall"/>
    <addaction name="actionProcessRecordedData"/>
    <addaction name="actionRunStarlinkDopplerAnalysis"/>
    <addaction name="actionSched"/>
@@ -564,6 +574,96 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+Shift+R</string>
+   </property>
+  </action>
+  <action name="actionOpenDataFlow">
+   <property name="icon">
+    <iconset resource="../../../resources/icons.qrc">
+     <normaloff>:/icons/icons/settings.svg</normaloff>:/icons/icons/settings.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Open Data-Flow</string>
+   </property>
+   <property name="toolTip">
+    <string>Open external Python data-flow GUI (demo.py)</string>
+   </property>
+   <property name="statusTip">
+    <string>Launch demo.py in a separate window</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+F</string>
+   </property>
+  </action>
+  <action name="actionOpenStarlinkAnalyzer">
+   <property name="icon">
+    <iconset resource="../../../resources/icons.qrc">
+     <normaloff>:/icons/icons/open.svg</normaloff>:/icons/icons/open.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Open Starlink Analyzer</string>
+   </property>
+   <property name="toolTip">
+    <string>Open demo.py for SigMF recordings</string>
+   </property>
+   <property name="statusTip">
+    <string>Launch demo.py in a separate window with selected SigMF input</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+G</string>
+   </property>
+  </action>
+  <action name="actionRunDopplerPreprocessing">
+   <property name="icon">
+    <iconset resource="../../../resources/icons.qrc">
+     <normaloff>:/icons/icons/refresh.svg</normaloff>:/icons/icons/refresh.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Run Doppler Preprocessing</string>
+   </property>
+   <property name="toolTip">
+    <string>Run correlation_preprocessing.py on a SigMF folder</string>
+   </property>
+   <property name="statusTip">
+    <string>Generate Doppler preprocessing outputs (.txt/.npy/.png)</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+K</string>
+   </property>
+  </action>
+  <action name="actionShowDopplerVelocityPlot">
+   <property name="icon">
+    <iconset resource="../../../resources/icons.qrc">
+     <normaloff>:/icons/icons/signal.svg</normaloff>:/icons/icons/signal.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Show Doppler Velocity Plot</string>
+   </property>
+   <property name="toolTip">
+    <string>Open velocity-domain Doppler plot from preprocessing .npy outputs</string>
+   </property>
+   <property name="statusTip">
+    <string>Launch velocity-view plotter on r*_waterfall_CF_*.npy outputs</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+V</string>
+   </property>
+  </action>
+  <action name="actionShowDopplerVelocityWaterfall">
+   <property name="icon">
+    <iconset resource="../../../resources/icons.qrc">
+     <normaloff>:/icons/icons/signal.svg</normaloff>:/icons/icons/signal.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Show Doppler Velocity Waterfall</string>
+   </property>
+   <property name="toolTip">
+    <string>Plot 2D Doppler velocity-time waterfall from .npy outputs</string>
+   </property>
+   <property name="statusTip">
+    <string>Open velocity waterfall view using r*_waterfall_CF_*.npy and axis .npy files</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+W</string>
    </property>
   </action>
   <action name="actionUsrpLnbFlow">

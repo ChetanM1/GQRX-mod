@@ -136,9 +136,11 @@ private:
     QProcess       *capture_process;
     QProcess       *plot_process;
     QProcess       *analysis_process;
+    QProcess       *doppler_preprocess_process;
     QString         m_last_capture_file;
     QString         m_last_plot_input;
     QString         m_last_analysis_output_dir;
+    QString         m_last_doppler_preprocess_dir;
     bool            m_plot_retry_attempted;
 
 private:
@@ -156,6 +158,9 @@ private:
     void startCaptureScript();
     void startStarlinkAnalysis(const QString& input_path = QString());
     QString findPythonScript(const QString& script_name) const;
+    void openDataFlowLauncher(const QString& input_path = QString());
+    void showDopplerVelocityPlot(const QString& output_dir = QString());
+    void showDopplerVelocityWaterfall(const QString& output_dir = QString());
     void startPlottingScript(const QString& capture_file = QString(), bool force_captures_arg = false);
     void showBackendResult(const QString& path);
     static QString extractExistingPath(const QString& output);
@@ -263,9 +268,15 @@ private slots:
     void on_actionRunStarlinkDopplerAnalysis_triggered(bool checked);
     void on_actionProcessRecordedData_triggered(bool checked);
     void on_actionSched_triggered(bool checked);
+    void on_actionOpenStarlinkAnalyzer_triggered(bool checked);
+    void on_actionRunDopplerPreprocessing_triggered(bool checked);
+    void on_actionShowDopplerVelocityPlot_triggered(bool checked);
+    void on_actionShowDopplerVelocityWaterfall_triggered(bool checked);
+    void on_actionOpenDataFlow_triggered(bool checked);
     void onCaptureProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
     void onPlotProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
     void onAnalysisProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
+    void onDopplerPreprocessFinished(int exitCode, QProcess::ExitStatus exitStatus);
 
     /* markers*/
     void on_setMarkerButtonA_clicked();
