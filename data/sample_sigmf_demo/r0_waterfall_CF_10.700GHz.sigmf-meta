@@ -1,0 +1,18 @@
+{
+  "global": {
+    "core:datatype": "cf32_le",
+    "core:sample_rate": 256000.0,
+    "core:version": "1.0.0",
+    "core:description": "Synthetic sample for Doppler preprocessing demo",
+    "core:author": "GQRX-mod sample generator",
+    "core:recorder": "synthetic"
+  },
+  "captures": [
+    {
+      "core:sample_start": 0,
+      "core:frequency": 10700000000.0,
+      "core:datetime": "2026-04-28T09:48:46.634344Z"
+    }
+  ],
+  "annotations": []
+}
