@@ -1177,102 +1177,48 @@ class PlottingWindow(tk.Toplevel):
 
 
 # ===================================================================
-# Velocity Plotting GUI (from compressed .txt files)
+# Velocity Plotting GUI (from Doppler preprocessing .npy files)
 # ===================================================================
 
-def find_txt_records(root_dir):
-    """Scan directory for compressed .txt files, return grouped by CF."""
-    txt_files = sorted(glob.glob(os.path.join(root_dir, "r*_f*GHz_*.txt")))
+def find_velocity_records(root_dir):
+    """Scan Doppler preprocessing outputs and return valid record descriptors."""
+    waterfall_paths = sorted(
+        glob.glob(os.path.join(root_dir, "r*_waterfall_CF_*.npy")))
     records = []
-    for path in txt_files:
-        fname = os.path.basename(path)
-        freq_match = re.search(r"_f([\d.]+)GHz_", fname)
-        time_match = re.search(r"_(\d{8}T\d{6})", fname)
-        if not freq_match:
+    warnings = []
+
+    for waterfall_path in waterfall_paths:
+        base = os.path.splitext(os.path.basename(waterfall_path))[0]
+        rel_vel_path = os.path.join(root_dir, f"rel_vel_{base}.npy")
+        time_path = os.path.join(root_dir, f"time_{base}.npy")
+        datetime_path = os.path.join(root_dir, f"datetime_updated_{base}.npy")
+
+        missing = []
+        if not os.path.exists(rel_vel_path):
+            missing.append(os.path.basename(rel_vel_path))
+        if not os.path.exists(time_path):
+            missing.append(os.path.basename(time_path))
+        if missing:
+            warnings.append(
+                f"Skipping {os.path.basename(waterfall_path)} (missing: {', '.join(missing)})")
             continue
-        cf_ghz = float(freq_match.group(1))
-        cap_time = None
-        if time_match:
-            cap_time = datetime.strptime(
-                time_match.group(1), "%Y%m%dT%H%M%S")
+
+        freq_match = re.search(r"_CF_([0-9.]+)GHz", base)
+        cf_ghz = float(freq_match.group(1)) if freq_match else None
         records.append({
-            "path": path,
+            "base": base,
+            "waterfall": waterfall_path,
+            "rel_vel": rel_vel_path,
+            "time": time_path,
+            "datetime": datetime_path if os.path.exists(datetime_path) else None,
             "cf_ghz": cf_ghz,
-            "capture_time": cap_time,
         })
-    return records
 
-
-def build_velocity_waterfall(txt_paths, cf_ghz, sample_rate=500000.0,
-                              k=10, nfft=1024, noverlap=512):
-    """Reconstruct velocity waterfall from compressed .txt files.
-
-    Returns (waterfall_db, vel_axis_kms, t_full) or (None, None, None).
-    """
-    v_max = 5000  # m/s
-    n_vel = 500
-    v_axis = np.linspace(-v_max, v_max, n_vel)
-    cf_hz = cf_ghz * 1e9
-
-    all_sparse = []
-    all_t = []
-    t0 = None
-
-    for txt_path in sorted(txt_paths,
-                           key=lambda p: os.path.basename(p)):
-        fname = os.path.basename(txt_path)
-        time_match = re.search(r"_(\d{8}T\d{6})", fname)
-        if not time_match:
-            continue
-        capture_time = datetime.strptime(
-            time_match.group(1), "%Y%m%dT%H%M%S")
-        if t0 is None:
-            t0 = capture_time
-
-        data = np.loadtxt(txt_path, dtype=complex)
-        num_rows = data.shape[0]
-        step = nfft - noverlap
-        t_local = (np.arange(num_rows) * step + nfft / 2) / sample_rate
-
-        recon_freqs = np.real(data[:, 0:k])
-        recon_vals = data[:, k:]
-
-        # Auto-detect if values are Hz rather than m/s
-        max_freq = np.max(np.abs(recon_freqs))
-        if max_freq > v_max * 2:
-            recon_freqs = C * recon_freqs / cf_hz
-
-        sparse = np.zeros((len(v_axis), num_rows), dtype=complex)
-        for i in range(num_rows):
-            idx = np.searchsorted(v_axis, recon_freqs[i, :])
-            idx = np.clip(idx, 0, len(v_axis) - 1)
-            sparse[idx, i] = recon_vals[i, :]
-
-        # Time offset from first capture
-        dt = (capture_time - t0).total_seconds()
-        all_sparse.append(sparse)
-        all_t.append(t_local + dt)
-        del data, sparse
-        gc.collect()
-
-    if not all_sparse:
-        return None, None, None
-
-    # Combine: sparse shape is (n_vel, n_time), waterfall is (n_time, n_vel)
-    full_sparse = np.concatenate(all_sparse, axis=1)
-    t_full = np.concatenate(all_t)
-    del all_sparse, all_t
-    gc.collect()
-
-    waterfall = full_sparse.T  # (n_time, n_vel)
-    wf_db = 10.0 * np.log10(np.abs(waterfall) + 1e-15).astype(np.float32)
-    vel_kms = v_axis / 1000.0
-
-    return wf_db, vel_kms, t_full
+    return records, warnings
 
 
 class VelocityPlottingWindow(tk.Toplevel):
-    """Plot velocity waterfalls from compressed .txt files."""
+    """Plot velocity-domain Doppler waterfalls from preprocessing .npy files."""
 
     def __init__(self, parent, capture_dir=None):
         super().__init__(parent)
@@ -1280,7 +1226,7 @@ class VelocityPlottingWindow(tk.Toplevel):
         self.geometry("1250x820")
         self.minsize(950, 600)
 
-        self.txt_records = []
+        self.velocity_records = []
         self.bands = {}
         self._band_cfs = []
         self.cached_data = None
@@ -1327,11 +1273,11 @@ class VelocityPlottingWindow(tk.Toplevel):
                              self._on_band_selected)
 
         # ---- Captures ----
-        cap_frame = ttk.LabelFrame(left, text="Captures (.txt)", padding=4)
+        cap_frame = ttk.LabelFrame(left, text="Velocity Outputs (.npy)", padding=4)
         cap_frame.pack(fill=tk.X, pady=(0, 6))
 
         self.cap_listbox = tk.Listbox(
-            cap_frame, height=4, selectmode=tk.EXTENDED,
+            cap_frame, height=5, selectmode=tk.SINGLE,
             exportselection=False)
         self.cap_listbox.pack(fill=tk.X)
         cap_btns = ttk.Frame(cap_frame)
@@ -1394,7 +1340,7 @@ class VelocityPlottingWindow(tk.Toplevel):
         self.fig = Figure(figsize=(10, 6), dpi=100)
         self.ax = self.fig.add_subplot(111)
         self.ax.set_title("Select band and click Plot")
-        self.ax.set_xlabel("Velocity (km/s)")
+        self.ax.set_xlabel("Relative Velocity (m/s)")
         self.ax.set_ylabel("Time (s)")
 
         self.canvas = FigureCanvasTkAgg(self.fig, master=right)
@@ -1421,19 +1367,28 @@ class VelocityPlottingWindow(tk.Toplevel):
         self.status_var.set("Scanning...")
         self.update_idletasks()
 
-        self.txt_records = find_txt_records(capture_dir)
-        if not self.txt_records:
-            self.status_var.set("No compressed .txt files found")
+        self.velocity_records, skipped = find_velocity_records(capture_dir)
+        if skipped:
+            messagebox.showwarning(
+                "Scan warning",
+                "Some Doppler outputs were skipped:\n\n" + "\n".join(skipped[:10]))
+
+        if not self.velocity_records:
+            self.status_var.set("No velocity waterfall .npy files found")
             return
 
         self.bands = {}
-        for r in self.txt_records:
+        for r in self.velocity_records:
             self.bands.setdefault(r["cf_ghz"], []).append(r)
 
-        cfs = sorted(self.bands.keys())
+        cfs = sorted(self.bands.keys(), key=lambda x: (-1 if x is None else x))
         self._band_cfs = cfs
-        labels = [f"{cf:.3f} GHz  ({len(self.bands[cf])} files)"
-                  for cf in cfs]
+        labels = []
+        for cf in cfs:
+            if cf is None:
+                labels.append(f"Unknown CF  ({len(self.bands[cf])} files)")
+            else:
+                labels.append(f"{cf:.3f} GHz  ({len(self.bands[cf])} files)")
         self.band_combo["values"] = labels
 
         if labels:
@@ -1441,7 +1396,7 @@ class VelocityPlottingWindow(tk.Toplevel):
             self._on_band_selected(None)
 
         self.status_var.set(
-            f"Found {len(self.txt_records)} .txt files "
+            f"Found {len(self.velocity_records)} velocity waterfalls "
             f"in {len(cfs)} bands")
 
     def _on_band_selected(self, event):
@@ -1450,16 +1405,14 @@ class VelocityPlottingWindow(tk.Toplevel):
             return
         cf = self._band_cfs[idx]
         recs = sorted(self.bands[cf],
-                      key=lambda r: r["path"])
+                      key=lambda r: r["base"])
 
         self.cap_listbox.delete(0, tk.END)
         for i, rec in enumerate(recs, 1):
-            fname = os.path.basename(rec["path"])
-            t_str = ""
-            if rec["capture_time"]:
-                t_str = f"  ({rec['capture_time'].strftime('%H:%M:%S')})"
-            self.cap_listbox.insert(tk.END, f"{fname}{t_str}")
-        self.cap_listbox.select_set(0, tk.END)
+            has_datetime = "datetime" if rec["datetime"] else "relative-time-only"
+            self.cap_listbox.insert(tk.END, f"{rec['base']}  [{has_datetime}]")
+        if recs:
+            self.cap_listbox.selection_set(0)
 
     def _select_all(self):
         self.cap_listbox.select_set(0, tk.END)
@@ -1487,7 +1440,7 @@ class VelocityPlottingWindow(tk.Toplevel):
         selected = list(self.cap_listbox.curselection())
         if not selected:
             messagebox.showwarning("Warning",
-                                   "Select at least one capture")
+                                   "Select one velocity waterfall")
             return
 
         cf = self._band_cfs[band_idx]
@@ -1498,26 +1451,35 @@ class VelocityPlottingWindow(tk.Toplevel):
             self._render_cached()
             return
 
-        recs = sorted(self.bands[cf], key=lambda r: r["path"])
-        chosen_paths = [recs[i]["path"] for i in selected]
+        recs = sorted(self.bands[cf], key=lambda r: r["base"])
+        chosen_rec = recs[selected[0]]
 
         self._computing = True
         self.status_var.set("Building velocity waterfall...")
         self.plot_btn.config(state="disabled")
         self.update_idletasks()
 
-        params = dict(cf_ghz=cf, paths=chosen_paths,
+        params = dict(cf_ghz=cf, record=chosen_rec,
                       selected=selected)
 
         def worker():
             try:
-                wf_db, vel_kms, t_full = build_velocity_waterfall(
-                    params["paths"], params["cf_ghz"])
-                if wf_db is None:
+                matrix = np.load(params["record"]["waterfall"])
+                vel = np.load(params["record"]["rel_vel"])
+                t_full = np.load(params["record"]["time"])
+                matrix_db = 10.0 * np.log10(np.abs(matrix) + 1e-15).astype(np.float32)
+
+                if matrix_db.shape == (len(t_full), len(vel)):
+                    plot_db = matrix_db
+                elif matrix_db.shape == (len(vel), len(t_full)):
+                    plot_db = matrix_db.T
+                else:
                     self.after(0, lambda: self._plot_error(
-                        "No data in selected .txt files"))
+                        f"Shape mismatch for {params['record']['base']}: "
+                        f"matrix {matrix_db.shape}, len(time)={len(t_full)}, len(vel)={len(vel)}"))
                     return
-                result = (wf_db, vel_kms, t_full)
+
+                result = (plot_db, vel, t_full)
                 self.after(0, lambda r=result: self._display_result(
                     r, params))
             except Exception as e:
@@ -1528,24 +1490,26 @@ class VelocityPlottingWindow(tk.Toplevel):
         threading.Thread(target=worker, daemon=True).start()
 
     def _render_cached(self):
-        wf_db, vel_kms, t_full = self.cached_data
+        wf_db, vel, t_full = self.cached_data
         cf = self._band_cfs[self.band_combo.current()]
-        n_sel = len(list(self.cap_listbox.curselection()))
+        recs = sorted(self.bands[cf], key=lambda r: r["base"])
+        selected_idx = list(self.cap_listbox.curselection())
+        selected_rec = recs[selected_idx[0]] if selected_idx else None
 
         self.fig.clear()
         self.ax = self.fig.add_subplot(111)
-        extent = [vel_kms[0], vel_kms[-1], t_full[0], t_full[-1]]
+        extent = [vel[0], vel[-1], t_full[0], t_full[-1]]
         self.im = self.ax.imshow(
             wf_db, extent=extent, aspect="auto", origin="lower",
             cmap=self.cmap_var.get(), interpolation="bilinear",
             vmin=self.db_min_var.get(), vmax=self.db_max_var.get())
         self._colorbar = self.fig.colorbar(
             self.im, ax=self.ax, label="Power (dB)")
-        self.ax.set_xlabel("Velocity (km/s)")
-        self.ax.set_ylabel("Time (s from first capture)")
-        title = f"CF = {cf:.3f} GHz — Velocity Waterfall"
-        if n_sel > 1:
-            title += f"  ({n_sel} files stitched)"
+        self.ax.set_xlabel("Relative Velocity (m/s)")
+        self.ax.set_ylabel("Time (s)")
+        title = "Doppler Velocity Waterfall"
+        if selected_rec:
+            title += f"\n{selected_rec['base']}"
         self.ax.set_title(title)
         self.ax.axvline(0, color="white", ls="--", lw=1, alpha=0.5)
         self.fig.tight_layout()
@@ -1556,26 +1520,24 @@ class VelocityPlottingWindow(tk.Toplevel):
         self._computing = False
         self.plot_btn.config(state="normal")
 
-        wf_db, vel_kms, t_full = result
+        wf_db, vel, t_full = result
         self.cached_data = result
         self._cached_key = (params["cf_ghz"], tuple(params["selected"]))
-        cf = params["cf_ghz"]
-        n_sel = len(params["paths"])
+        rec = params["record"]
 
         self.fig.clear()
         self.ax = self.fig.add_subplot(111)
-        extent = [vel_kms[0], vel_kms[-1], t_full[0], t_full[-1]]
+        extent = [vel[0], vel[-1], t_full[0], t_full[-1]]
         self.im = self.ax.imshow(
             wf_db, extent=extent, aspect="auto", origin="lower",
             cmap=self.cmap_var.get(), interpolation="bilinear",
             vmin=self.db_min_var.get(), vmax=self.db_max_var.get())
         self._colorbar = self.fig.colorbar(
             self.im, ax=self.ax, label="Power (dB)")
-        self.ax.set_xlabel("Velocity (km/s)")
-        self.ax.set_ylabel("Time (s from first capture)")
-        title = f"CF = {cf:.3f} GHz — Velocity Waterfall"
-        if n_sel > 1:
-            title += f"  ({n_sel} files stitched)"
+        self.ax.set_xlabel("Relative Velocity (m/s)")
+        self.ax.set_ylabel("Time (s)")
+        title = "Doppler Velocity Waterfall"
+        title += f"\n{rec['base']}"
         self.ax.set_title(title)
         self.ax.axvline(0, color="white", ls="--", lw=1, alpha=0.5)
         self.fig.tight_layout()
@@ -1616,13 +1578,17 @@ def main():
                         help="Skip capture, open plotter on this directory")
     parser.add_argument("--velocity", type=str, default=None,
                         help="Skip capture, open velocity plotter on this directory")
+    parser.add_argument("--velocity-waterfall", type=str, default=None,
+                        help="Skip capture, open 2D Doppler velocity waterfall on this directory")
     args = parser.parse_args()
 
     root = tk.Tk()
 
-    if args.plot or args.velocity:
+    if args.plot or args.velocity or args.velocity_waterfall:
         root.withdraw()
-        if args.velocity:
+        if args.velocity_waterfall:
+            VelocityPlottingWindow(root, args.velocity_waterfall)
+        elif args.velocity:
             VelocityPlottingWindow(root, args.velocity)
         else:
             PlottingWindow(root, args.plot)
