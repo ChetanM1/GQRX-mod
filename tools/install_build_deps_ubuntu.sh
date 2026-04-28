@@ -49,6 +49,9 @@ BASE_PKGS=(
 )
 
 QT_PKGS=(
+  qt6-base-dev
+  qt6-svg-dev
+  qt6-tools-dev-tools
   qtbase5-dev
   qtchooser
   qt5-qmake

@@ -201,10 +201,15 @@ For command line builds:
 <pre>
 $ git clone https://github.com/gqrx-sdr/gqrx.git gqrx.git
 $ cd gqrx.git
+$ ./tools/install_build_deps_ubuntu.sh
 $ mkdir build
 $ cd build
 $ cmake ..
 $ make
+</pre>
+If CMake reports `Qt5Config.cmake`/`qt5-config.cmake` missing, install Qt dev packages first (Ubuntu/Debian):
+<pre>
+$ ./tools/install_build_deps_ubuntu.sh
 </pre>
 On some systems, the default cmake release builds are "over-optimized" and
 perform poorly. In that case try forcing -O2 using

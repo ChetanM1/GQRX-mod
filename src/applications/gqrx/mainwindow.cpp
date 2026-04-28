@@ -2472,11 +2472,6 @@ void MainWindow::startPlottingScript(const QString& capture_file)
     plot_process->setProcessEnvironment(env);
 
     QStringList args{plotting_script};
-    if (!capture_file.isEmpty())
-    {
-        args << capture_file; // pass positional input path for broad plotting.py compatibility
-    }
-
     plot_process->start("python3", args);
     if (!plot_process->waitForStarted(2000))
     {
