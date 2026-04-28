@@ -2356,6 +2356,27 @@ void MainWindow::startStarlinkAnalysis(const QString& input_path)
             return;
     }
 
+    const QString lower_input = input.toLower();
+    if (lower_input.endsWith(".sigmf-data") || lower_input.endsWith(".sigmf-meta"))
+    {
+        QFileInfo chosen(input);
+        const QString base = chosen.absolutePath() + "/" + chosen.completeBaseName();
+        const QString meta = base + ".sigmf-meta";
+        const QString data = base + ".sigmf-data";
+        if (!QFileInfo::exists(meta) || !QFileInfo::exists(data))
+        {
+            QMessageBox::warning(
+                this,
+                tr("Python backend"),
+                tr("SigMF capture requires both paired files:\n"
+                   "  %1\n"
+                   "  %2\n\n"
+                   "Please ensure both exist before running analysis.")
+                    .arg(meta, data));
+            return;
+        }
+    }
+
     const QString output_dir = QFileDialog::getExistingDirectory(
         this,
         tr("Select output directory"),

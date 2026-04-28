@@ -144,6 +144,7 @@ flowchart LR
 > - These additions do **not** replace the native Gqrx FFT/waterfall renderer.
 > - They extend the GUI and invoke external scripts through `QProcess`.
 > - Offline processing supports direct selection of `.sigmf-meta` / `.sigmf-data` as well as raw IQ files.
+> - SigMF processing requires both paired files (`*.sigmf-meta` + `*.sigmf-data`); selecting either is enough and the pair is resolved automatically.
 > - If Python backend actions fail with `No module named ...`, run `./tools/install_python_backend_deps.sh`.
 
 
