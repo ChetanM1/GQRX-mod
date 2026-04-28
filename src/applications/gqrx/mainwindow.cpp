@@ -32,6 +32,7 @@
 #include <QDesktopServices>
 #include <QDialogButtonBox>
 #include <QDialog>
+#include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QGroupBox>
@@ -46,6 +47,7 @@
 #include <QRegularExpression>
 #include <QResource>
 #include <QShortcut>
+#include <QSet>
 #include <QString>
 #include <QTextBrowser>
 #include <QTextCursor>
@@ -69,6 +71,70 @@
 
 #include "qtgui/bookmarkstaglist.h"
 #include "qtgui/bandplan.h"
+
+namespace {
+bool validateSigmfSelection(const QString& selected_path, QString* error_msg)
+{
+    const QFileInfo selected_info(selected_path);
+    if (!selected_info.exists())
+    {
+        if (error_msg)
+            *error_msg = QObject::tr("The selected path does not exist:\n%1").arg(selected_path);
+        return false;
+    }
+
+    if (selected_info.isDir())
+    {
+        const QDir dir(selected_path);
+        const QStringList meta_files = dir.entryList(QStringList() << "*.sigmf-meta", QDir::Files);
+        QSet<QString> meta_bases;
+        for (const QString& meta_file : meta_files)
+            meta_bases.insert(QFileInfo(meta_file).completeBaseName());
+
+        const QStringList data_files = dir.entryList(QStringList() << "*.sigmf-data", QDir::Files);
+        for (const QString& data_file : data_files)
+        {
+            if (meta_bases.contains(QFileInfo(data_file).completeBaseName()))
+                return true;
+        }
+
+        if (error_msg)
+        {
+            *error_msg = QObject::tr(
+                "The selected directory does not contain a complete SigMF pair.\n\n"
+                "A valid recording needs both .sigmf-meta and .sigmf-data files with the same base name.");
+        }
+        return false;
+    }
+
+    const QString lower = selected_info.fileName().toLower();
+    if (!lower.endsWith(".sigmf-meta") && !lower.endsWith(".sigmf-data"))
+    {
+        if (error_msg)
+        {
+            *error_msg = QObject::tr(
+                "Please select a SigMF directory, a .sigmf-meta file, or a .sigmf-data file.");
+        }
+        return false;
+    }
+
+    const QString base = selected_info.absolutePath() + "/" + selected_info.completeBaseName();
+    const QString meta = base + ".sigmf-meta";
+    const QString data = base + ".sigmf-data";
+    if (!QFileInfo::exists(meta) || !QFileInfo::exists(data))
+    {
+        if (error_msg)
+        {
+            *error_msg = QObject::tr(
+                "The selected SigMF recording is incomplete.\n\nMissing pair:\n%1\n%2")
+                             .arg(meta, data);
+        }
+        return false;
+    }
+
+    return true;
+}
+}
 
 MainWindow::MainWindow(const QString& cfgfile, bool edit_conf, QWidget *parent) :
     QMainWindow(parent),
@@ -2495,6 +2561,63 @@ void MainWindow::on_actionProcessRecordedData_triggered(bool checked)
 
     m_last_dir = QFileInfo(selected).absolutePath();
     startPlottingScript(selected);
+}
+
+void MainWindow::on_openStarlinkAnalyzerButton_clicked()
+{
+    QFileDialog picker(this, tr("Select SigMF recording input"), m_last_dir);
+    picker.setFileMode(QFileDialog::AnyFile);
+    picker.setOption(QFileDialog::DontUseNativeDialog, true);
+    picker.setOption(QFileDialog::ShowDirsOnly, false);
+    picker.setNameFilter(tr("SigMF recordings (*.sigmf-meta *.sigmf-data);;All files (*)"));
+
+    if (picker.exec() != QDialog::Accepted)
+        return;
+
+    const QStringList selected_paths = picker.selectedFiles();
+    if (selected_paths.isEmpty())
+        return;
+
+    const QString selected_path = selected_paths.first();
+    QString validation_error;
+    if (!validateSigmfSelection(selected_path, &validation_error))
+    {
+        QMessageBox::warning(this, tr("Open Starlink Analyzer"), validation_error);
+        return;
+    }
+
+    QString demo_script;
+    if (m_settings && m_settings->contains("python/demo_script_path"))
+    {
+        demo_script = m_settings->value("python/demo_script_path").toString();
+    }
+    if (demo_script.isEmpty())
+        demo_script = findPythonScript("demo.py");
+    if (demo_script.isEmpty())
+    {
+        QMessageBox::critical(this, tr("Open Starlink Analyzer"),
+                              tr("Could not find demo.py.\n"
+                                 "Set python/demo_script_path in settings, or place demo.py in "
+                                 "the repo root or tools/ directory."));
+        return;
+    }
+
+    auto *demo_process = new QProcess(this);
+    connect(demo_process, SIGNAL(finished(int,QProcess::ExitStatus)),
+            demo_process, SLOT(deleteLater()));
+    demo_process->start("python3", QStringList{demo_script, "--plot", selected_path});
+    if (!demo_process->waitForStarted(2000))
+    {
+        QMessageBox::critical(this, tr("Open Starlink Analyzer"),
+                              tr("Failed to launch Starlink Analyzer.\n\n"
+                                 "Command: python3 %1 --plot %2")
+                                  .arg(demo_script, selected_path));
+        demo_process->deleteLater();
+        return;
+    }
+
+    m_last_dir = QFileInfo(selected_path).absolutePath();
+    ui->statusBar->showMessage(tr("Launched Starlink Analyzer"), 5000);
 }
 
 void MainWindow::onCaptureProcessFinished(int exitCode, QProcess::ExitStatus exitStatus)
