@@ -10,7 +10,7 @@ from starlink_backend import (
     compress_series,
     compute_waterfall,
     doppler_to_velocity,
-    estimate_doppler,
+    estimate_topk_doppler,
     load_iq,
     resolve_input,
 )
@@ -35,12 +35,12 @@ def main() -> int:
     output_dir = Path(args.output).expanduser().resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    data_path, sample_rate, center_freq = resolve_input(input_path, args.sample_rate, args.center_freq)
-    iq = load_iq(data_path)
+    ctx = resolve_input(input_path, args.sample_rate, args.center_freq)
+    iq = load_iq(ctx.data_path, ctx.datatype)
     waterfall_db = compute_waterfall(iq)
-    t, doppler_hz = estimate_doppler(waterfall_db, sample_rate)
+    t, doppler_hz = estimate_topk_doppler(waterfall_db, ctx.sample_rate, k=5)
     t_comp, doppler_comp = compress_series(t, doppler_hz, factor=16)
-    velocity = doppler_to_velocity(doppler_comp, center_freq)
+    velocity = doppler_to_velocity(doppler_comp, ctx.center_freq)
 
     # Waterfall plot
     water_png = output_dir / "waterfall.png"
@@ -77,6 +77,12 @@ def main() -> int:
     plt.close()
 
     print(f"RESULT_DIR: {output_dir}")
+    if ctx.meta_path:
+        print(f"META_PATH: {ctx.meta_path}")
+    print(f"DATA_PATH: {ctx.data_path}")
+    print(f"SAMPLE_RATE_HZ: {ctx.sample_rate}")
+    print(f"CENTER_FREQ_HZ: {ctx.center_freq}")
+    print(f"CAPTURE_TIMESTAMP: {ctx.timestamp}")
     print(f"WATERFALL_PNG: {water_png}")
     print(f"DOPPLER_CSV: {doppler_csv}")
     print(f"VELOCITY_PNG: {vel_png}")
