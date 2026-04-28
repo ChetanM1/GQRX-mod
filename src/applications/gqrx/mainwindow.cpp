@@ -2474,8 +2474,7 @@ void MainWindow::startPlottingScript(const QString& capture_file)
     QStringList args{plotting_script};
     if (!capture_file.isEmpty())
     {
-        args << "--input" << capture_file;
-        args << capture_file; // compatibility with plotting scripts that use positional input
+        args << capture_file; // pass positional input path for broad plotting.py compatibility
     }
 
     plot_process->start("python3", args);
