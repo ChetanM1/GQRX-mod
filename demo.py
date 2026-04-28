@@ -1182,8 +1182,16 @@ class PlottingWindow(tk.Toplevel):
 
 def find_velocity_records(root_dir):
     """Scan Doppler preprocessing outputs and return valid record descriptors."""
-    waterfall_paths = sorted(
+    raw_candidates = sorted(
         glob.glob(os.path.join(root_dir, "r*_waterfall_CF_*.npy")))
+    waterfall_paths = []
+    for path in raw_candidates:
+        name = os.path.basename(path)
+        if (name.startswith("rel_vel_") or
+                name.startswith("time_") or
+                name.startswith("datetime_updated_")):
+            continue
+        waterfall_paths.append(path)
     records = []
     warnings = []
 
@@ -1467,11 +1475,35 @@ class VelocityPlottingWindow(tk.Toplevel):
                 matrix = np.load(params["record"]["waterfall"])
                 vel = np.load(params["record"]["rel_vel"])
                 t_full = np.load(params["record"]["time"])
+                vel = np.asarray(vel).reshape(-1)
+                t_full = np.asarray(t_full).reshape(-1)
                 matrix_db = 10.0 * np.log10(np.abs(matrix) + 1e-15).astype(np.float32)
 
-                if matrix_db.shape == (len(t_full), len(vel)):
+                if matrix_db.ndim != 2:
+                    self.after(0, lambda: self._plot_error(
+                        f"Expected 2D matrix, got shape {matrix_db.shape}"))
+                    return
+
+                rows, cols = matrix_db.shape
+                if cols == len(vel):
+                    expected_t_len = rows
+                    if len(t_full) == 1 and expected_t_len > 1:
+                        t_full = np.linspace(0.0, float(t_full[0]), expected_t_len)
+                    if len(t_full) != expected_t_len:
+                        self.after(0, lambda: self._plot_error(
+                            f"Shape mismatch for {params['record']['base']}: "
+                            f"matrix {matrix_db.shape}, len(time)={len(t_full)}, len(vel)={len(vel)}"))
+                        return
                     plot_db = matrix_db
-                elif matrix_db.shape == (len(vel), len(t_full)):
+                elif rows == len(vel):
+                    expected_t_len = cols
+                    if len(t_full) == 1 and expected_t_len > 1:
+                        t_full = np.linspace(0.0, float(t_full[0]), expected_t_len)
+                    if len(t_full) != expected_t_len:
+                        self.after(0, lambda: self._plot_error(
+                            f"Shape mismatch for {params['record']['base']}: "
+                            f"matrix {matrix_db.shape}, len(time)={len(t_full)}, len(vel)={len(vel)}"))
+                        return
                     plot_db = matrix_db.T
                 else:
                     self.after(0, lambda: self._plot_error(
