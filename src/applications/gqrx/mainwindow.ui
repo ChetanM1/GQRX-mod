@@ -419,6 +419,11 @@
     <addaction name="actionIqTool"/>
     <addaction name="separator"/>
     <addaction name="actionAFSK1200"/>
+    <addaction name="actionUsrpLnbFlow"/>
+    <addaction name="actionRunCapture"/>
+    <addaction name="actionProcessRecordedData"/>
+    <addaction name="actionRunStarlinkDopplerAnalysis"/>
+    <addaction name="actionSched"/>
     <addaction name="separator"/>
     <addaction name="actionDX_Cluster"/>
    </widget>
@@ -440,6 +445,11 @@
    <addaction name="actionDSP"/>
    <addaction name="separator"/>
    <addaction name="actionIoConfig"/>
+   <addaction name="actionUsrpLnbFlow"/>
+   <addaction name="actionRunCapture"/>
+   <addaction name="actionProcessRecordedData"/>
+   <addaction name="actionRunStarlinkDopplerAnalysis"/>
+   <addaction name="actionSched"/>
    <addaction name="actionLoadSettings"/>
    <addaction name="actionSaveSettings"/>
    <addaction name="separator"/>
@@ -519,7 +529,7 @@
     <bool>true</bool>
    </property>
    <property name="enabled">
-    <bool>false</bool>
+    <bool>true</bool>
    </property>
    <property name="icon">
     <iconset resource="../../../resources/icons.qrc">
@@ -529,7 +539,85 @@
     <string>Scheduler</string>
    </property>
    <property name="toolTip">
-    <string>Schedule recordings and other actions</string>
+    <string>Run Python capture/plot backend</string>
+   </property>
+   <property name="statusTip">
+    <string>Run external capture.py and optional plotting.py with current SDR parameters</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+P</string>
+   </property>
+  </action>
+  <action name="actionRunCapture">
+   <property name="icon">
+    <iconset resource="../../../resources/icons.qrc">
+     <normaloff>:/icons/icons/play.svg</normaloff>:/icons/icons/play.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Run Capture</string>
+   </property>
+   <property name="toolTip">
+    <string>Run live Python SDR capture with current Gqrx parameters</string>
+   </property>
+   <property name="statusTip">
+    <string>Launch capture.py for live capture/frequency hopping</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+R</string>
+   </property>
+  </action>
+  <action name="actionUsrpLnbFlow">
+   <property name="icon">
+    <iconset resource="../../../resources/icons.qrc">
+     <normaloff>:/icons/icons/clock.svg</normaloff>:/icons/icons/clock.svg</iconset>
+   </property>
+   <property name="text">
+    <string>USRP/LNB Flow</string>
+   </property>
+   <property name="toolTip">
+    <string>Open USRP + LNB capture/plot workflow launcher</string>
+   </property>
+   <property name="statusTip">
+    <string>Launch live capture, process SigMF/raw data, or run Starlink Doppler analysis</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+U</string>
+   </property>
+  </action>
+  <action name="actionProcessRecordedData">
+   <property name="icon">
+    <iconset resource="../../../resources/icons.qrc">
+     <normaloff>:/icons/icons/open.svg</normaloff>:/icons/icons/open.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Process SigMF/Raw Data</string>
+   </property>
+   <property name="toolTip">
+    <string>Run plotting.py on existing SigMF or raw IQ recordings</string>
+   </property>
+   <property name="statusTip">
+    <string>Select recorded file/folder and run offline processing</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+O</string>
+   </property>
+  </action>
+  <action name="actionRunStarlinkDopplerAnalysis">
+   <property name="icon">
+    <iconset resource="../../../resources/icons.qrc">
+     <normaloff>:/icons/icons/open.svg</normaloff>:/icons/icons/open.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Run Starlink Doppler Analysis</string>
+   </property>
+   <property name="toolTip">
+    <string>Run starlink_pipeline.py on recorded IQ/SigMF input</string>
+   </property>
+   <property name="statusTip">
+    <string>Generate waterfall, compressed Doppler, and velocity plots</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+L</string>
    </property>
   </action>
   <action name="actionIoConfig">
