@@ -27,6 +27,7 @@
  * authors and should not be interpreted as representing official policies, either expressed
  * or implied, of Moe Wheatley.
  */
+#include <algorithm>
 #include <cmath>
 #include <QColor>
 #include <QDateTime>
@@ -893,58 +894,61 @@ void CPlotter::zoomOnXAxis(float level)
 
 void CPlotter::autoFitToSignal()
 {
-    if (m_fftDataSize == 0)
+    if (m_fftDataSize == 0 || m_SampleFreq <= 0.0f)
         return;
 
     const int size = m_fftDataSize;
+    std::vector<float> fftDb(size);
+    for (int i = 0; i < size; ++i)
+        fftDb[i] = 10.0f * log10f(std::max(m_fftData[i], 1e-20f));
 
-    float avg = 0.0f;
-    for (int i = 0; i < size; i++)
-        avg += m_fftData[i];
-
-    avg /= size;
-
-    float threshold = avg * 5.0f;
+    std::vector<float> sortedDb = fftDb;
+    const int noiseIdx = std::clamp(size / 5, 0, size - 1);   // ~20th percentile
+    std::nth_element(sortedDb.begin(), sortedDb.begin() + noiseIdx, sortedDb.end());
+    const float noiseFloor = sortedDb[noiseIdx];
+    const float thresholdDb = noiseFloor + 6.0f;
 
     int peakIndex = 0;
-    float peakValue = m_fftData[0];
-
-    for (int i = 1; i < size; i++)
+    for (int i = 1; i < size; ++i)
     {
-        if (m_fftData[i] > peakValue)
-        {
-            peakValue = m_fftData[i];
+        if (fftDb[i] > fftDb[peakIndex])
             peakIndex = i;
-        }
     }
 
     int left = peakIndex;
-    while (left > 0 && m_fftData[left] > threshold)
-        left--;
+    while (left > 0 && fftDb[left] > thresholdDb)
+        --left;
 
     int right = peakIndex;
-    while (right < size - 1 && m_fftData[right] > threshold)
-        right++;
+    while (right < size - 1 && fftDb[right] > thresholdDb)
+        ++right;
 
-    int margin = std::max(10, (right - left) / 5);
-    left = std::max(0, left - margin);
-    right = std::min(size - 1, right + margin);
-
-    float fraction = float(right - left) / float(size);
-
-    if (fraction < 0.01f)
+    if (right - left < 2)
         return;
 
-    float newZoom = 1.0f / fraction;
+    const int marginBins = std::max(12, (right - left) / 4);
+    left = std::max(0, left - marginBins);
+    right = std::min(size - 1, right + marginBins);
 
-    zoomOnXAxis(newZoom);
+    const double binsPerHz = (double)size / (double)m_SampleFreq;
+    const double leftHz = ((double)left - (double)size / 2.0) / binsPerHz;
+    const double rightHz = ((double)right - (double)size / 2.0) / binsPerHz;
 
-    qint64 signalFreq = freqFromX((left + right) / 2);
-    m_DemodCenterFreq = signalFreq;
+    const double signalBwHz = std::max(100.0, rightHz - leftHz);
+    const double targetSpanHz = std::clamp(signalBwHz * 1.25, signalBwHz, (double)m_SampleFreq);
+    const quint32 newSpan = std::max(2u, (quint32)qRound(targetSpanHz));
 
-    emit newDemodFreq(signalFreq, signalFreq - m_CenterFreq);
+    m_Span = newSpan;
+    setFftCenterFreq(qRound64((leftHz + rightHz) / 2.0));
+
+    m_MaxHoldValid = false;
+    m_MinHoldValid = false;
+    m_histIIRValid = false;
 
     updateOverlay();
+
+    const double zoom = (double)m_SampleFreq / (double)m_Span;
+    emit newZoomLevel(zoom);
 }
 
 void CPlotter::setPlotMode(int mode)
