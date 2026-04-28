@@ -159,6 +159,7 @@ private:
     void startStarlinkAnalysis(const QString& input_path = QString());
     QString findPythonScript(const QString& script_name) const;
     void showDopplerVelocityPlot(const QString& output_dir = QString());
+    void showDopplerVelocityWaterfall(const QString& output_dir = QString());
     void startPlottingScript(const QString& capture_file = QString(), bool force_captures_arg = false);
     void showBackendResult(const QString& path);
     static QString extractExistingPath(const QString& output);
@@ -269,6 +270,7 @@ private slots:
     void on_actionOpenStarlinkAnalyzer_triggered(bool checked);
     void on_actionRunDopplerPreprocessing_triggered(bool checked);
     void on_actionShowDopplerVelocityPlot_triggered(bool checked);
+    void on_actionShowDopplerVelocityWaterfall_triggered(bool checked);
     void onCaptureProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
     void onPlotProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
     void onAnalysisProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);

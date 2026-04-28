@@ -1507,10 +1507,7 @@ class VelocityPlottingWindow(tk.Toplevel):
             self.im, ax=self.ax, label="Power (dB)")
         self.ax.set_xlabel("Relative Velocity (m/s)")
         self.ax.set_ylabel("Time (s)")
-        if cf is None:
-            title = "Doppler Velocity Waterfall: CF ≈ Unknown"
-        else:
-            title = f"Doppler Velocity Waterfall: CF ≈ {cf:.3f} GHz"
+        title = "Doppler Velocity Waterfall"
         if selected_rec:
             title += f"\n{selected_rec['base']}"
         self.ax.set_title(title)
@@ -1526,7 +1523,6 @@ class VelocityPlottingWindow(tk.Toplevel):
         wf_db, vel, t_full = result
         self.cached_data = result
         self._cached_key = (params["cf_ghz"], tuple(params["selected"]))
-        cf = params["cf_ghz"]
         rec = params["record"]
 
         self.fig.clear()
@@ -1540,10 +1536,7 @@ class VelocityPlottingWindow(tk.Toplevel):
             self.im, ax=self.ax, label="Power (dB)")
         self.ax.set_xlabel("Relative Velocity (m/s)")
         self.ax.set_ylabel("Time (s)")
-        if cf is None:
-            title = "Doppler Velocity Waterfall: CF ≈ Unknown"
-        else:
-            title = f"Doppler Velocity Waterfall: CF ≈ {cf:.3f} GHz"
+        title = "Doppler Velocity Waterfall"
         title += f"\n{rec['base']}"
         self.ax.set_title(title)
         self.ax.axvline(0, color="white", ls="--", lw=1, alpha=0.5)
@@ -1585,13 +1578,17 @@ def main():
                         help="Skip capture, open plotter on this directory")
     parser.add_argument("--velocity", type=str, default=None,
                         help="Skip capture, open velocity plotter on this directory")
+    parser.add_argument("--velocity-waterfall", type=str, default=None,
+                        help="Skip capture, open 2D Doppler velocity waterfall on this directory")
     args = parser.parse_args()
 
     root = tk.Tk()
 
-    if args.plot or args.velocity:
+    if args.plot or args.velocity or args.velocity_waterfall:
         root.withdraw()
-        if args.velocity:
+        if args.velocity_waterfall:
+            VelocityPlottingWindow(root, args.velocity_waterfall)
+        elif args.velocity:
             VelocityPlottingWindow(root, args.velocity)
         else:
             PlottingWindow(root, args.plot)

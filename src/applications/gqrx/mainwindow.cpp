@@ -2625,6 +2625,12 @@ void MainWindow::on_actionOpenStarlinkAnalyzer_triggered(bool checked)
 
 void MainWindow::showDopplerVelocityPlot(const QString& output_dir)
 {
+    // Legacy entry point kept for compatibility.
+    showDopplerVelocityWaterfall(output_dir);
+}
+
+void MainWindow::showDopplerVelocityWaterfall(const QString& output_dir)
+{
     QString selected_dir = output_dir;
     if (selected_dir.isEmpty())
     {
@@ -2645,7 +2651,7 @@ void MainWindow::showDopplerVelocityPlot(const QString& output_dir)
     {
         QMessageBox::critical(
             this,
-            tr("Show Doppler Velocity Plot"),
+            tr("Show Doppler Velocity Waterfall"),
             tr("Could not find demo.py.\n"
                "Set python/demo_script_path in settings, or place demo.py in "
                "the repo root or tools/ directory."));
@@ -2655,16 +2661,16 @@ void MainWindow::showDopplerVelocityPlot(const QString& output_dir)
     auto *velocity_process = new QProcess(this);
     connect(velocity_process, SIGNAL(finished(int,QProcess::ExitStatus)),
             velocity_process, SLOT(deleteLater()));
-    velocity_process->start("python3", QStringList{demo_script, "--velocity", selected_dir});
+    velocity_process->start("python3", QStringList{demo_script, "--velocity-waterfall", selected_dir});
     if (!velocity_process->waitForStarted(2000))
     {
         const QString stderr_text =
             QString::fromLocal8Bit(velocity_process->readAllStandardError()).trimmed();
         QMessageBox::critical(
             this,
-            tr("Show Doppler Velocity Plot"),
-            tr("Failed to launch Doppler velocity plot.\n\n"
-               "Command: python3 %1 --velocity %2%3")
+            tr("Show Doppler Velocity Waterfall"),
+            tr("Failed to launch Doppler velocity waterfall.\n\n"
+               "Command: python3 %1 --velocity-waterfall %2%3")
                 .arg(demo_script, selected_dir,
                      stderr_text.isEmpty() ? QString() : QString("\n\nstderr:\n%1").arg(stderr_text)));
         velocity_process->deleteLater();
@@ -2672,13 +2678,19 @@ void MainWindow::showDopplerVelocityPlot(const QString& output_dir)
     }
 
     m_last_dir = selected_dir;
-    ui->statusBar->showMessage(tr("Opening Doppler velocity plot..."), 5000);
+    ui->statusBar->showMessage(tr("Opening Doppler velocity waterfall..."), 5000);
 }
 
 void MainWindow::on_actionShowDopplerVelocityPlot_triggered(bool checked)
 {
     Q_UNUSED(checked);
     showDopplerVelocityPlot();
+}
+
+void MainWindow::on_actionShowDopplerVelocityWaterfall_triggered(bool checked)
+{
+    Q_UNUSED(checked);
+    showDopplerVelocityWaterfall();
 }
 
 void MainWindow::on_actionRunDopplerPreprocessing_triggered(bool checked)
@@ -2765,12 +2777,12 @@ void MainWindow::onDopplerPreprocessFinished(int exitCode, QProcess::ExitStatus 
         auto open_plot = QMessageBox::question(
             this,
             tr("Run Doppler Preprocessing"),
-            tr("Show Doppler Velocity Plot now?\n\nOutput folder:\n%1")
+            tr("Show Doppler Velocity Waterfall now?\n\nOutput folder:\n%1")
                 .arg(m_last_doppler_preprocess_dir),
             QMessageBox::Yes | QMessageBox::No,
             QMessageBox::Yes);
         if (open_plot == QMessageBox::Yes)
-            showDopplerVelocityPlot(m_last_doppler_preprocess_dir);
+            showDopplerVelocityWaterfall(m_last_doppler_preprocess_dir);
     }
     else
     {

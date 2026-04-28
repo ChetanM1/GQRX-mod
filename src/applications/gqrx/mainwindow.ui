@@ -434,6 +434,7 @@
     <addaction name="actionOpenStarlinkAnalyzer"/>
     <addaction name="actionRunDopplerPreprocessing"/>
     <addaction name="actionShowDopplerVelocityPlot"/>
+    <addaction name="actionShowDopplerVelocityWaterfall"/>
     <addaction name="actionProcessRecordedData"/>
     <addaction name="actionRunStarlinkDopplerAnalysis"/>
     <addaction name="actionSched"/>
@@ -463,6 +464,7 @@
    <addaction name="actionOpenStarlinkAnalyzer"/>
    <addaction name="actionRunDopplerPreprocessing"/>
    <addaction name="actionShowDopplerVelocityPlot"/>
+   <addaction name="actionShowDopplerVelocityWaterfall"/>
    <addaction name="actionProcessRecordedData"/>
    <addaction name="actionRunStarlinkDopplerAnalysis"/>
    <addaction name="actionSched"/>
@@ -634,6 +636,24 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+Shift+V</string>
+   </property>
+  </action>
+  <action name="actionShowDopplerVelocityWaterfall">
+   <property name="icon">
+    <iconset resource="../../../resources/icons.qrc">
+     <normaloff>:/icons/icons/signal.svg</normaloff>:/icons/icons/signal.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Show Doppler Velocity Waterfall</string>
+   </property>
+   <property name="toolTip">
+    <string>Plot 2D Doppler velocity-time waterfall from .npy outputs</string>
+   </property>
+   <property name="statusTip">
+    <string>Open velocity waterfall view using r*_waterfall_CF_*.npy and axis .npy files</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+W</string>
    </property>
   </action>
   <action name="actionUsrpLnbFlow">
