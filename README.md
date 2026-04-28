@@ -63,8 +63,9 @@ This repository includes optional GUI extensions for:
 
 - **Run Capture** (live external Python capture)
 - **Process Recorded Data** (offline external Python plotting)
-- **USRP/LNB Flow** (single launcher for live capture, offline processing, or `demo.py`)
+- **USRP/LNB Flow** (single launcher for live capture, offline processing, or Starlink Doppler analysis)
 - **Fit Signal** (auto-zoom around strongest FFT signal)
+- **Run Starlink Doppler Analysis** (waterfall + compressed Doppler + velocity plots)
 
 ### Where to access in the GUI
 
@@ -83,10 +84,14 @@ This repository includes optional GUI extensions for:
   - Opens chooser for:
     - `Run Live Capture`
     - `Process SigMF/Raw`
-    - `Open demo.py GUI`
+    - `Run Starlink Doppler Analysis`
 - **Fit Signal**:
   - Open the FFT settings dock (`FFT Set...`)
   - Click the **Fit Signal** button
+- **Run Starlink Doppler Analysis**:
+  - `Tools -> Run Starlink Doppler Analysis`
+  - Toolbar button (open icon)
+  - Shortcut: `Ctrl+Shift+L`
 
 ### Live capture flow (GUI -> capture.py -> optional plotting.py)
 
@@ -127,6 +132,8 @@ flowchart LR
 
 - Generate synthetic IQ demo file:
   - `python3 tools/generate_fit_demo_iq.py ./fit_demo.cfile --sample-rate 1000000 --seconds 12`
+- Run Starlink analysis CLI directly:
+  - `python3 tools/starlink_pipeline.py --input <iq_file_or_sigmf_dir> --output <output_dir> --sample-rate <rate> --center-freq <freq>`
 - Install common Ubuntu build/runtime deps:
   - `./tools/install_build_deps_ubuntu.sh`
   - `./tools/install_build_deps_ubuntu.sh --build`

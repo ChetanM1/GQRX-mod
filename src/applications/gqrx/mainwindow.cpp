@@ -52,6 +52,7 @@
 #include <QTextStream>
 #include <QtGlobal>
 #include <QTimer>
+#include <QUrl>
 #include <QVBoxLayout>
 #include <QSvgWidget>
 #include "qtgui/ioconfig.h"
@@ -82,6 +83,7 @@ MainWindow::MainWindow(const QString& cfgfile, bool edit_conf, QWidget *parent) 
     dec_afsk1200(nullptr),
     capture_process(nullptr),
     plot_process(nullptr),
+    analysis_process(nullptr),
     m_plot_retry_attempted(false)
 {
     ui->setupUi(this);
@@ -2324,6 +2326,92 @@ void MainWindow::on_actionRunCapture_triggered(bool checked)
     startCaptureScript();
 }
 
+void MainWindow::startStarlinkAnalysis(const QString& input_path)
+{
+    if (analysis_process != nullptr)
+    {
+        QMessageBox::information(this, tr("Python backend"),
+                                 tr("Starlink analysis is already running."));
+        return;
+    }
+
+    QString input = input_path;
+    if (input.isEmpty())
+    {
+        input = QFileDialog::getOpenFileName(
+            this,
+            tr("Select SigMF/raw recorded file"),
+            m_last_dir,
+            tr("SigMF files (*.sigmf-meta *.sigmf-data);;"
+               "Raw/IQ files (*.cfile *.raw *.bin *.iq *.wav);;"
+               "All files (*)"));
+        if (input.isEmpty())
+        {
+            input = QFileDialog::getExistingDirectory(
+                this,
+                tr("Select recording directory"),
+                m_last_dir);
+        }
+        if (input.isEmpty())
+            return;
+    }
+
+    const QString output_dir = QFileDialog::getExistingDirectory(
+        this,
+        tr("Select output directory"),
+        QFileInfo(input).absolutePath());
+    if (output_dir.isEmpty())
+        return;
+
+    const QString pipeline_script = findPythonScript("starlink_pipeline.py");
+    if (pipeline_script.isEmpty())
+    {
+        QMessageBox::warning(this, tr("Python backend"),
+                             tr("Could not find starlink_pipeline.py.\n"
+                                "Place it in the repo root or tools/ directory."));
+        return;
+    }
+
+    analysis_process = new QProcess(this);
+    connect(analysis_process, SIGNAL(finished(int,QProcess::ExitStatus)),
+            this, SLOT(onAnalysisProcessFinished(int,QProcess::ExitStatus)));
+
+    m_last_analysis_output_dir = output_dir;
+    m_last_dir = QFileInfo(input).absolutePath();
+
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    env.insert("GQRX_CAPTURE_FILE", input);
+    env.insert("GQRX_SAMPLE_RATE", QString::number(qRound64(rx->get_input_rate())));
+    env.insert("GQRX_CENTER_FREQ_HZ", QString::number(ui->freqCtrl->getFrequency()));
+    analysis_process->setProcessEnvironment(env);
+
+    QStringList args{
+        pipeline_script,
+        "--input", input,
+        "--output", output_dir,
+        "--sample-rate", QString::number(qRound64(rx->get_input_rate())),
+        "--center-freq", QString::number(ui->freqCtrl->getFrequency())
+    };
+
+    analysis_process->start("python3", args);
+    if (!analysis_process->waitForStarted(2000))
+    {
+        QMessageBox::critical(this, tr("Python backend"),
+                              tr("Failed to start starlink_pipeline.py."));
+        analysis_process->deleteLater();
+        analysis_process = nullptr;
+        return;
+    }
+
+    ui->statusBar->showMessage(tr("Starlink Doppler analysis started..."));
+}
+
+void MainWindow::on_actionRunStarlinkDopplerAnalysis_triggered(bool checked)
+{
+    Q_UNUSED(checked);
+    startStarlinkAnalysis();
+}
+
 void MainWindow::on_actionUsrpLnbFlow_triggered(bool checked)
 {
     Q_UNUSED(checked);
@@ -2334,7 +2422,7 @@ void MainWindow::on_actionUsrpLnbFlow_triggered(bool checked)
     box.setText(tr("Choose workflow mode:"));
     auto *capture_btn = box.addButton(tr("Run Live Capture"), QMessageBox::ActionRole);
     auto *process_btn = box.addButton(tr("Process SigMF/Raw"), QMessageBox::ActionRole);
-    auto *demo_btn = box.addButton(tr("Open demo.py GUI"), QMessageBox::ActionRole);
+    auto *analysis_btn = box.addButton(tr("Run Starlink Doppler Analysis"), QMessageBox::ActionRole);
     box.addButton(QMessageBox::Cancel);
     box.exec();
 
@@ -2346,23 +2434,9 @@ void MainWindow::on_actionUsrpLnbFlow_triggered(bool checked)
     {
         on_actionProcessRecordedData_triggered(false);
     }
-    else if (box.clickedButton() == demo_btn)
+    else if (box.clickedButton() == analysis_btn)
     {
-        const QString demo_script = findPythonScript("demo.py");
-        if (demo_script.isEmpty())
-        {
-            QMessageBox::warning(this, tr("Python backend"),
-                                 tr("Could not find demo.py.\n"
-                                    "Place it in the repo root or tools/ directory."));
-            return;
-        }
-
-        const bool started = QProcess::startDetached("python3", {demo_script});
-        if (!started)
-        {
-            QMessageBox::critical(this, tr("Python backend"),
-                                  tr("Failed to start demo.py."));
-        }
+        startStarlinkAnalysis();
     }
 }
 
@@ -2570,6 +2644,40 @@ void MainWindow::onPlotProcessFinished(int exitCode, QProcess::ExitStatus exitSt
 
     plot_process->deleteLater();
     plot_process = nullptr;
+}
+
+void MainWindow::onAnalysisProcessFinished(int exitCode, QProcess::ExitStatus exitStatus)
+{
+    if (!analysis_process)
+        return;
+
+    const QString std_out = QString::fromLocal8Bit(analysis_process->readAllStandardOutput());
+    const QString std_err = QString::fromLocal8Bit(analysis_process->readAllStandardError());
+    const QString combined = std_out + "\n" + std_err;
+    const bool ok = (exitStatus == QProcess::NormalExit && exitCode == 0);
+    const QString out_path = extractExistingPath(combined);
+
+    if (!ok)
+    {
+        QMessageBox::warning(this, tr("Python backend"),
+                             tr("Starlink Doppler analysis failed.\n\n%1").arg(combined.left(4000)));
+    }
+    else if (!out_path.isEmpty())
+    {
+        showBackendResult(out_path);
+    }
+    else if (!m_last_analysis_output_dir.isEmpty())
+    {
+        QDesktopServices::openUrl(QUrl::fromLocalFile(m_last_analysis_output_dir));
+    }
+    else
+    {
+        QMessageBox::information(this, tr("Python backend"),
+                                 tr("Starlink Doppler analysis completed.\n\n%1").arg(combined.left(2000)));
+    }
+
+    analysis_process->deleteLater();
+    analysis_process = nullptr;
 }
 
 void MainWindow::showBackendResult(const QString& path)
