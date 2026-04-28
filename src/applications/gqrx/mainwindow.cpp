@@ -81,7 +81,8 @@ MainWindow::MainWindow(const QString& cfgfile, bool edit_conf, QWidget *parent) 
     d_have_audio(true),
     dec_afsk1200(nullptr),
     capture_process(nullptr),
-    plot_process(nullptr)
+    plot_process(nullptr),
+    m_plot_retry_attempted(false)
 {
     ui->setupUi(this);
     BandPlan::create();
@@ -2441,10 +2442,14 @@ void MainWindow::onCaptureProcessFinished(int exitCode, QProcess::ExitStatus exi
         startPlottingScript(m_last_capture_file);
 }
 
-void MainWindow::startPlottingScript(const QString& capture_file)
+void MainWindow::startPlottingScript(const QString& capture_file, bool force_captures_arg)
 {
     if (plot_process != nullptr)
         return;
+
+    if (!force_captures_arg)
+        m_plot_retry_attempted = false;
+    m_last_plot_input = capture_file;
 
     const QString plotting_script = findPythonScript("plotting.py");
     if (plotting_script.isEmpty())
@@ -2474,27 +2479,30 @@ void MainWindow::startPlottingScript(const QString& capture_file)
     QStringList args{plotting_script};
     if (!capture_file.isEmpty())
     {
-        QProcess help_probe;
-        help_probe.start("python3", QStringList{plotting_script, "-h"});
-        help_probe.waitForFinished(1500);
-        const QString help_text = QString::fromLocal8Bit(help_probe.readAllStandardOutput()) +
-                                  "\n" +
-                                  QString::fromLocal8Bit(help_probe.readAllStandardError());
-
         const QFileInfo in_info(capture_file);
         const QString capture_dir = in_info.isDir() ? in_info.absoluteFilePath() : in_info.absolutePath();
 
-        if (help_text.contains("--captures"))
+        if (force_captures_arg)
         {
             args << "--captures" << capture_dir;
         }
-        else if (help_text.contains("--input"))
-        {
-            args << "--input" << capture_file;
-        }
         else
         {
-            args << capture_file;
+            QProcess help_probe;
+            help_probe.start("python3", QStringList{plotting_script, "-h"});
+            help_probe.waitForFinished(4000);
+            const QString help_text = QString::fromLocal8Bit(help_probe.readAllStandardOutput()) +
+                                      "\n" +
+                                      QString::fromLocal8Bit(help_probe.readAllStandardError());
+
+            if (help_text.contains("--captures"))
+            {
+                args << "--captures" << capture_dir;
+            }
+            else if (help_text.contains("--input"))
+            {
+                args << "--input" << capture_file;
+            }
         }
     }
 
@@ -2524,6 +2532,19 @@ void MainWindow::onPlotProcessFinished(int exitCode, QProcess::ExitStatus exitSt
 
     if (!ok)
     {
+        if (!m_plot_retry_attempted &&
+            !m_last_plot_input.isEmpty() &&
+            combined.contains("unrecognized arguments", Qt::CaseInsensitive) &&
+            combined.contains("--captures"))
+        {
+            m_plot_retry_attempted = true;
+            plot_process->deleteLater();
+            plot_process = nullptr;
+            ui->statusBar->showMessage(tr("Retrying plotting.py with --captures ..."), 5000);
+            startPlottingScript(m_last_plot_input, true);
+            return;
+        }
+
         QString hint;
         if (combined.contains("No module named", Qt::CaseInsensitive))
         {

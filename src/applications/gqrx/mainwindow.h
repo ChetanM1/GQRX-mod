@@ -136,6 +136,8 @@ private:
     QProcess       *capture_process;
     QProcess       *plot_process;
     QString         m_last_capture_file;
+    QString         m_last_plot_input;
+    bool            m_plot_retry_attempted;
 
 private:
     void updateHWFrequencyRange(bool ignore_limits);
@@ -151,7 +153,7 @@ private:
     void toggleMarkers();
     void startCaptureScript();
     QString findPythonScript(const QString& script_name) const;
-    void startPlottingScript(const QString& capture_file = QString());
+    void startPlottingScript(const QString& capture_file = QString(), bool force_captures_arg = false);
     void showBackendResult(const QString& path);
     static QString extractExistingPath(const QString& output);
 
