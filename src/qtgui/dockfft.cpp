@@ -25,6 +25,7 @@
 #include <QSettings>
 #include <QDebug>
 #include <QVariant>
+#include <QPushButton>
 #include "dockfft.h"
 #include "ui_dockfft.h"
 
@@ -70,12 +71,12 @@ DockFft::DockFft(QWidget *parent) :
     ui(new Ui::DockFft)
 {
     ui->setupUi(this);
-    QPushButton *autoFitButton = new QPushButton("Fit Signal", this);
-ui->verticalLayout->addWidget(autoFitButton);
+    QPushButton *autoFitButton = new QPushButton(tr("Fit Signal"), this);
+    ui->verticalLayout->addWidget(autoFitButton);
 
-connect(autoFitButton, &QPushButton::clicked, this, [this]() {
-    emit autoFitSignalRequested();
-});
+    connect(autoFitButton, &QPushButton::clicked, this, [this]() {
+        emit autoFitSignalRequested();
+    });
 
     m_sample_rate = 0.f;
     m_pand_last_modified = false;

@@ -31,6 +31,7 @@
 #include <QTimer>
 #include <QMessageBox>
 #include <QFileDialog>
+#include <QProcess>
 #include <QSvgWidget>
 
 #include "qtgui/dockrxopt.h"
@@ -132,6 +133,13 @@ private:
     QSvgWidget      *qsvg_dummy;
 
     QFont font;
+    QProcess       *capture_process;
+    QProcess       *plot_process;
+    QProcess       *analysis_process;
+    QString         m_last_capture_file;
+    QString         m_last_plot_input;
+    QString         m_last_analysis_output_dir;
+    bool            m_plot_retry_attempted;
 
 private:
     void updateHWFrequencyRange(bool ignore_limits);
@@ -145,6 +153,12 @@ private:
     void rxOffsetZeroShortcut();
     void toggleFreezeShortcut();
     void toggleMarkers();
+    void startCaptureScript();
+    void startStarlinkAnalysis(const QString& input_path = QString());
+    QString findPythonScript(const QString& script_name) const;
+    void startPlottingScript(const QString& capture_file = QString(), bool force_captures_arg = false);
+    void showBackendResult(const QString& path);
+    static QString extractExistingPath(const QString& output);
 
 private slots:
     /* RecentConfig */
@@ -244,6 +258,14 @@ private slots:
     void on_actionAboutQt_triggered();
     void on_actionAddBookmark_triggered();
     void on_actionDX_Cluster_triggered();
+    void on_actionUsrpLnbFlow_triggered(bool checked);
+    void on_actionRunCapture_triggered(bool checked);
+    void on_actionRunStarlinkDopplerAnalysis_triggered(bool checked);
+    void on_actionProcessRecordedData_triggered(bool checked);
+    void on_actionSched_triggered(bool checked);
+    void onCaptureProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
+    void onPlotProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
+    void onAnalysisProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
 
     /* markers*/
     void on_setMarkerButtonA_clicked();
