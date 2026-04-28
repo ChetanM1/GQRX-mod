@@ -263,6 +263,7 @@ private slots:
     void on_actionRunStarlinkDopplerAnalysis_triggered(bool checked);
     void on_actionProcessRecordedData_triggered(bool checked);
     void on_actionSched_triggered(bool checked);
+    void on_openStarlinkAnalyzerButton_clicked();
     void onCaptureProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
     void onPlotProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
     void onAnalysisProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
