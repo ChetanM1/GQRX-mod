@@ -75,6 +75,8 @@ DockAudio::DockAudio(QWidget *parent) :
     QObject::connect(mute_toggle_shortcut, &QShortcut::activated, this, &DockAudio::muteToggleShortcut);
     QObject::connect(audio_gain_increase_shortcut1, &QShortcut::activated, this, &DockAudio::increaseAudioGainShortcut);
     QObject::connect(audio_gain_decrease_shortcut1, &QShortcut::activated, this, &DockAudio::decreaseAudioGainShortcut);
+
+    setRecordingScheduleIndicator(false);
 }
 
 DockAudio::~DockAudio()
@@ -222,6 +224,8 @@ void DockAudio::on_audioStreamButton_clicked(bool checked)
  */
 void DockAudio::on_audioRecButton_clicked(bool checked)
 {
+    setRecordingScheduleIndicator(checked);
+
     if (checked) {
         // FIXME: option to use local time
         // use toUTC() function compatible with older versions of Qt.
@@ -311,10 +315,25 @@ void DockAudio::setAudioRecButtonState(bool checked)
     // toggle the button and set the state of the other buttons accordingly
     ui->audioRecButton->toggle();
     bool isChecked = ui->audioRecButton->isChecked();
+    setRecordingScheduleIndicator(isChecked);
 
     ui->audioRecButton->setToolTip(isChecked ? tr("Stop audio recorder") : tr("Start audio recorder"));
     ui->audioPlayButton->setEnabled(!isChecked);
     //ui->audioRecConfButton->setEnabled(!isChecked);
+}
+
+void DockAudio::setRecordingScheduleIndicator(bool active)
+{
+    if (active)
+    {
+        ui->audioRecStatusLabel->setText(tr("Rec Schedule: ON"));
+        ui->audioRecStatusLabel->setStyleSheet("QLabel { color: #d22; font-weight: bold; }");
+    }
+    else
+    {
+        ui->audioRecStatusLabel->setText(tr("Rec Schedule: OFF"));
+        ui->audioRecStatusLabel->setStyleSheet("QLabel { color: #666; }");
+    }
 }
 
 /*! \brief Set status of audio record button. */
