@@ -2472,6 +2472,32 @@ void MainWindow::startPlottingScript(const QString& capture_file)
     plot_process->setProcessEnvironment(env);
 
     QStringList args{plotting_script};
+    if (!capture_file.isEmpty())
+    {
+        QProcess help_probe;
+        help_probe.start("python3", QStringList{plotting_script, "-h"});
+        help_probe.waitForFinished(1500);
+        const QString help_text = QString::fromLocal8Bit(help_probe.readAllStandardOutput()) +
+                                  "\n" +
+                                  QString::fromLocal8Bit(help_probe.readAllStandardError());
+
+        const QFileInfo in_info(capture_file);
+        const QString capture_dir = in_info.isDir() ? in_info.absoluteFilePath() : in_info.absolutePath();
+
+        if (help_text.contains("--captures"))
+        {
+            args << "--captures" << capture_dir;
+        }
+        else if (help_text.contains("--input"))
+        {
+            args << "--input" << capture_file;
+        }
+        else
+        {
+            args << capture_file;
+        }
+    }
+
     plot_process->start("python3", args);
     if (!plot_process->waitForStarted(2000))
     {
