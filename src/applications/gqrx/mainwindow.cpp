@@ -150,6 +150,7 @@ MainWindow::MainWindow(const QString& cfgfile, bool edit_conf, QWidget *parent) 
     capture_process(nullptr),
     plot_process(nullptr),
     analysis_process(nullptr),
+    doppler_preprocess_process(nullptr),
     m_plot_retry_attempted(false)
 {
     ui->setupUi(this);
@@ -2563,8 +2564,10 @@ void MainWindow::on_actionProcessRecordedData_triggered(bool checked)
     startPlottingScript(selected);
 }
 
-void MainWindow::on_openStarlinkAnalyzerButton_clicked()
+void MainWindow::on_actionOpenStarlinkAnalyzer_triggered(bool checked)
 {
+    Q_UNUSED(checked);
+
     QFileDialog picker(this, tr("Select SigMF recording input"), m_last_dir);
     picker.setFileMode(QFileDialog::AnyFile);
     picker.setOption(QFileDialog::DontUseNativeDialog, true);
@@ -2618,6 +2621,100 @@ void MainWindow::on_openStarlinkAnalyzerButton_clicked()
 
     m_last_dir = QFileInfo(selected_path).absolutePath();
     ui->statusBar->showMessage(tr("Launched Starlink Analyzer"), 5000);
+}
+
+void MainWindow::on_actionRunDopplerPreprocessing_triggered(bool checked)
+{
+    Q_UNUSED(checked);
+
+    if (doppler_preprocess_process != nullptr)
+    {
+        QMessageBox::information(this, tr("Run Doppler Preprocessing"),
+                                 tr("Doppler preprocessing is already running."));
+        return;
+    }
+
+    const QString selected_dir = QFileDialog::getExistingDirectory(
+        this,
+        tr("Select folder with SigMF files"),
+        m_last_dir);
+    if (selected_dir.isEmpty())
+        return;
+
+    QDir dir(selected_dir);
+    const bool has_meta = !dir.entryList(QStringList() << "*.sigmf-meta", QDir::Files).isEmpty();
+    const bool has_data = !dir.entryList(QStringList() << "*.sigmf-data", QDir::Files).isEmpty();
+    if (!has_meta || !has_data)
+    {
+        QMessageBox::warning(
+            this,
+            tr("Run Doppler Preprocessing"),
+            tr("Selected folder must contain both .sigmf-meta and .sigmf-data files."));
+        return;
+    }
+
+    QString script_path;
+    if (m_settings && m_settings->contains("python/doppler_preprocess_script_path"))
+        script_path = m_settings->value("python/doppler_preprocess_script_path").toString();
+    if (script_path.isEmpty())
+        script_path = findPythonScript("correlation_preprocessing.py");
+    if (script_path.isEmpty())
+        script_path = "correlation_preprocessing.py";
+
+    doppler_preprocess_process = new QProcess(this);
+    connect(doppler_preprocess_process, SIGNAL(finished(int,QProcess::ExitStatus)),
+            this, SLOT(onDopplerPreprocessFinished(int,QProcess::ExitStatus)));
+
+    doppler_preprocess_process->setWorkingDirectory(selected_dir);
+    doppler_preprocess_process->start("python3", QStringList{script_path, selected_dir});
+    if (!doppler_preprocess_process->waitForStarted(2000))
+    {
+        const QString stderr_text =
+            QString::fromLocal8Bit(doppler_preprocess_process->readAllStandardError()).trimmed();
+        QMessageBox::critical(
+            this,
+            tr("Run Doppler Preprocessing"),
+            tr("Failed to start Doppler preprocessing.\n\nCommand: python3 %1 %2%3")
+                .arg(script_path, selected_dir,
+                     stderr_text.isEmpty() ? QString() : QString("\n\nstderr:\n%1").arg(stderr_text)));
+        doppler_preprocess_process->deleteLater();
+        doppler_preprocess_process = nullptr;
+        return;
+    }
+
+    m_last_doppler_preprocess_dir = selected_dir;
+    m_last_dir = selected_dir;
+    ui->statusBar->showMessage(tr("Running Doppler preprocessing..."));
+}
+
+void MainWindow::onDopplerPreprocessFinished(int exitCode, QProcess::ExitStatus exitStatus)
+{
+    if (!doppler_preprocess_process)
+        return;
+
+    const QString stderr_text =
+        QString::fromLocal8Bit(doppler_preprocess_process->readAllStandardError()).trimmed();
+    const bool ok = (exitStatus == QProcess::NormalExit && exitCode == 0);
+    if (ok)
+    {
+        QMessageBox::information(
+            this,
+            tr("Run Doppler Preprocessing"),
+            tr("Doppler preprocessing finished.\n\nOutput folder:\n%1")
+                .arg(m_last_doppler_preprocess_dir));
+        ui->statusBar->showMessage(tr("Doppler preprocessing finished"), 5000);
+    }
+    else
+    {
+        QMessageBox::critical(
+            this,
+            tr("Run Doppler Preprocessing"),
+            tr("Doppler preprocessing failed.\n\nstderr:\n%1")
+                .arg(stderr_text.isEmpty() ? tr("(no stderr output)") : stderr_text.left(12000)));
+    }
+
+    doppler_preprocess_process->deleteLater();
+    doppler_preprocess_process = nullptr;
 }
 
 void MainWindow::onCaptureProcessFinished(int exitCode, QProcess::ExitStatus exitStatus)
